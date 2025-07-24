@@ -10,6 +10,7 @@ interface SmartInputBarProps {
   inputRef: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
   height?: number;
   onHeightChange?: (height: number) => void;
+  onSendMessage?: (message: string) => void;
 }
 
 export default function SmartInputBar({ 
@@ -18,7 +19,8 @@ export default function SmartInputBar({
   setInputText, 
   inputRef,
   height = 80,
-  onHeightChange
+  onHeightChange,
+  onSendMessage
 }: SmartInputBarProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartY = useRef(0);
@@ -31,6 +33,20 @@ export default function SmartInputBar({
   // Height constraints
   const MIN_HEIGHT = 64;
   const MAX_HEIGHT = 400;
+
+  const handleSendClick = useCallback(() => {
+    if (inputText.trim() && onSendMessage) {
+      onSendMessage(inputText.trim());
+      setInputText('');
+    }
+  }, [inputText, onSendMessage, setInputText]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendClick();
+    }
+  }, [handleSendClick]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -133,6 +149,7 @@ export default function SmartInputBar({
                     ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={handleKeyDown}
                     className={`flex-1 w-full h-auto min-h-7 bg-transparent text-black font-normal font-['Neue_Montreal'] outline-none placeholder:text-black/30 resize-none transition-all duration-200 ease-out
                       ${inputText.trim() ? 'text-left' : 'text-center placeholder:text-center'}`}
                     style={{ 
@@ -160,6 +177,7 @@ export default function SmartInputBar({
                     className="w-7 h-7 p-1.5 rounded-full flex justify-center items-center bg-black opacity-100 hover:bg-black/80 cursor-pointer scale-100 transition-all duration-150 ease-out"
                     aria-label="Send"
                     tabIndex={0}
+                    onClick={handleSendClick}
                   >
                     <ArrowUp size={14} className="text-white" />
                   </button>
@@ -213,18 +231,6 @@ export default function SmartInputBar({
           <div className="w-full flex flex-col">
             {/* Input + Buttons Area */}
             <div className="relative w-full flex flex-col">
-              {/* Draggable Handle */}
-              {/* <div 
-                id="smart-input-handle"
-                onMouseDown={handleMouseDown}
-                className={`w-10 h-[5px] absolute -top-[13px] left-1/2 transform -translate-x-1/2 bg-[#d9d9d9] rounded-[100px] cursor-ns-resize select-none
-                  transition-all duration-150 ease-out
-                  ${isDragging 
-                    ? 'bg-[#999] scale-110 shadow-lg' 
-                    : 'hover:bg-[#bbb] hover:scale-105 active:bg-[#999]'
-                  }`}
-              /> */}
-
               {/* Context Button (Left) */}
               {(isHovered || inputText.trim()) && (
                 <div className="absolute left-[0px] bottom-[0px] flex items-center z-10 transition-opacity duration-200" style={{opacity: (isHovered || inputText.trim()) ? 1 : 0}}>
@@ -248,6 +254,7 @@ export default function SmartInputBar({
                     ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={handleKeyDown}
                     className={`max-w-[50%] min-w-[400px] h-7 flex-1 bg-transparent text-black font-normal font-['Neue_Montreal'] outline-none placeholder:text-black/30 resize-none transition-all duration-200 ease-out
                       ${inputText.trim() ? 'text-left' : 'text-center align-text-top placeholder:text-center'}`}
                     style={{ 
@@ -274,6 +281,7 @@ export default function SmartInputBar({
                     className="w-7 h-7 p-1.5 rounded-full flex justify-center items-center bg-black opacity-100 hover:bg-black/80 cursor-pointer scale-100 transition-all duration-150 ease-out"
                     aria-label="Send"
                     tabIndex={0}
+                    onClick={handleSendClick}
                   >
                     <ArrowUp size={14} className="text-white" />
                   </button>

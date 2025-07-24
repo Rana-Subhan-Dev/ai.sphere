@@ -440,6 +440,38 @@ export default function Vortex(props: VortexProps) {
     }
   }, [webViewVisible, props.onWebViewStateChange]);
 
+  // Handle sending messages from SmartBar
+  const handleSendMessage = useCallback(async (message: string) => {
+    // Open chat if not already open
+    if (!chatVisible) {
+      setChatOpening(true);
+      setChatVisible(true);
+      props.onChatStateChange?.(true);
+      setTimeout(() => {
+        setChatOpening(false);
+      }, 500);
+    }
+    
+    // The actual message sending will be handled by ChatView
+    // We just need to trigger the chat to open with the message
+    // For now, we'll store the message and pass it to ChatView
+    setPendingMessage(message);
+  }, [chatVisible, props]);
+
+  // Add state for pending message
+  const [pendingMessage, setPendingMessage] = useState<string>('');
+
+  // Clear pending message when chat opens
+  useEffect(() => {
+    if (chatVisible && pendingMessage) {
+      // Small delay to ensure ChatView is mounted
+      setTimeout(() => {
+        // The ChatView will handle the pending message
+        setPendingMessage('');
+      }, 100);
+    }
+  }, [chatVisible, pendingMessage]);
+
   return (
     <DragDropProvider onFileDrop={handleFileDrop}>
       <WebViewProvider 
@@ -509,6 +541,8 @@ export default function Vortex(props: VortexProps) {
           onInteractionDisplaySheetClose={() => setInteractionDisplaySheetVisible(false)}
           isNodeSelected={props.isNodeSelected}
           collectionUpdateTrigger={props.collectionUpdateTrigger}
+          onSendMessage={handleSendMessage}
+          pendingMessage={pendingMessage}
         />
         
         {/* Drag overlay - highest z-index */}
@@ -583,6 +617,8 @@ const VortexContent: React.FC<{
   onInteractionDisplaySheetClose: () => void;
   isNodeSelected?: boolean;
   collectionUpdateTrigger?: number;
+  onSendMessage?: (message: string) => void;
+  pendingMessage?: string;
 }> = (props) => {
   // Initialize drag and drop hooks
   useFileDrop();
@@ -666,6 +702,8 @@ const VortexContent: React.FC<{
           isVisible={props.chatVisible}
           onClose={props.onChatClose}
           isOpening={props.chatOpening}
+          selectedCollection={props.selectedNode?.name}
+          pendingMessage={props.pendingMessage}
         />
       </div>
 
@@ -721,13 +759,17 @@ const VortexContent: React.FC<{
               onPlusClick={props.onPlusClick}
             />
           ) : null}
-          <SmartBar 
-            onStateChange={props.onSmartBarStateChange} 
-            onHoverChange={props.onSmartBarHoverChange}
-            forceHidden={props.isDockHovered}
-            onHover={props.onSmartBarHover}
-            interactionPreviewVisible={props.interactionPreviewVisible}
-          />
+          {/* SmartBar - only show when not in agent view and interaction preview is not visible */}
+          {!props.agentViewVisible && !props.interactionPreviewVisible && props.selectedNode === null && (
+            <SmartBar
+              onStateChange={props.onSmartBarStateChange}
+              onHoverChange={props.onSmartBarHover}
+              forceHidden={false}
+              onHover={props.onSmartBarHover}
+              interactionPreviewVisible={props.interactionPreviewVisible}
+              onSendMessage={props.onSendMessage}
+            />
+          )}
         </div>
       </div>
 

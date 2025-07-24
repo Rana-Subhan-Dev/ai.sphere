@@ -17,6 +17,7 @@ export interface CollectionFile {
   file_size: number;
   content_type: string;
   created_at: string;
+  content?: string; // Added for text files
 }
 
 export interface CollectionData {
@@ -40,6 +41,59 @@ export interface UploadResponse {
   message: string;
   url: string;
 }
+
+// Query API Types
+export interface QuerySource {
+  content: string;
+  data_type: string;
+  collection_name: string;
+  metadata: Record<string, any>;
+  score: number;
+  chunk_id: string;
+  created_at: string;
+}
+
+export interface QueryResponse {
+  answer: string;
+  sources: QuerySource[];
+  collections_searched: string[];
+}
+
+// Query documents
+export const queryDocuments = async (
+  userId: string,
+  query: string,
+  collectionName: string = "",
+  topK: number = 5
+): Promise<QueryResponse | null> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/query`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        query: query,
+        collection_name: collectionName,
+        top_k: topK,
+      }),
+    });
+
+    const data = await response.json();
+    
+    if (response.ok) {
+      return data;
+    }
+    
+    console.error('Failed to query documents:', data);
+    return null;
+  } catch (error) {
+    console.error('Error querying documents:', error);
+    return null;
+  }
+};
 
 // Get user collections using the new API endpoint
 export const getUserCollections = async (userId: string): Promise<UserCollection[]> => {
@@ -138,6 +192,31 @@ export const uploadToCollection = async (
     return null;
   } catch (error) {
     console.error('Error uploading:', error);
+    return null;
+  }
+};
+
+// Get text file content
+export const getTextFileContent = async (fileId: string): Promise<string | null> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/get_text_content`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file_id: fileId }),
+    });
+
+    const data = await response.json();
+    
+    if (response.ok && data.success) {
+      return data.content;
+    }
+    
+    console.error('Failed to fetch text content:', data);
+    return null;
+  } catch (error) {
+    console.error('Error fetching text content:', error);
     return null;
   }
 };

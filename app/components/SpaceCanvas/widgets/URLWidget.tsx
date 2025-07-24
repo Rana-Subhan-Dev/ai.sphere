@@ -1,127 +1,54 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Handle, Position } from '@xyflow/react';
 import { Globe } from 'lucide-react';
-import { useWebView } from '../../../context/WebViewContext';
-
-interface URLWidgetData {
-  url: string;
-  title?: string;
-  favicon?: string;
-  description?: string;
-  status?: 'loading' | 'loaded' | 'error';
-  lastVisited?: Date;
-  preview?: string;
-  category?: 'search' | 'social' | 'productivity' | 'entertainment' | 'development' | 'other';
-  viewMode?: 'default' | 'preview';
-}
 
 interface URLWidgetProps {
-  data: URLWidgetData;
-  selected?: boolean;
+  data: {
+    fileName: string;
+    fileURL: string;
+    createdAt: string;
+  };
 }
 
-const URLWidget: React.FC<URLWidgetProps> = ({ data, selected }) => {
-  const { openWebView } = useWebView();
-  const viewMode = data.viewMode || 'default';
-  const [isHovering, setIsHovering] = useState(false);
-  const showBg = isHovering || selected;
+const URLWidget: React.FC<URLWidgetProps> = ({ data }) => {
+  const url = data.fileURL;
+  const hostname = new URL(url).hostname;
 
-  const formatDomain = (url: string) => {
-    try {
-      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-      return urlObj.hostname.replace('www.', '');
-    } catch {
-      return url;
-    }
-  };
-
-  if (viewMode === 'default') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-      >
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {selected && (
-            <div
-              style={{
-                position: 'absolute',
-                top: -6,
-                left: -6,
-                width: 80 + 12,
-                height: 64 + 12,
-                background: 'rgba(0,0,0,0.035)',
-                // backdropFilter: 'blur(8px)',
-                // WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(0,0,0,0.03)',
-                borderRadius: 5,
-                zIndex: 0,
-              }}
-            />
-          )}
-          <div
-            style={{
-              width: 80,
-              height: 64,
-              backgroundColor: '#fff',
-              borderRadius: 2,
-              boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              position: 'relative',
-              zIndex: 1,
-            }}
-            onClick={() => {
-              if (data.url) {
-                const urlToOpen = data.url.startsWith('http') ? data.url : `https://${data.url}`;
-                openWebView(urlToOpen);
-              }
-            }}
-          >
-            {data.favicon ? (
-              <img
-                src={data.favicon}
-                alt="favicon"
-                style={{ width: 24, height: 24, borderRadius: 6, background: '#f3f4f6', objectFit: 'contain' }}
-                onError={e => (e.currentTarget.style.display = 'none')}
-              />
-            ) : (
-              <Globe size={24} color="#9ca3af" strokeWidth={1.5} />
-            )}
-          </div>
-        </div>
-        {(data.title || data.url) && (
-          <div
-            style={{
-              marginTop: 8,
-              fontSize: 12,
-              color: 'rgba(0, 0, 0, 0.4)',
-              textAlign: 'center',
-              maxWidth: 80,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              padding: '2px 6px',
-              borderRadius: 6,
-              background: showBg ? 'rgba(0,0,0,0.07)' : 'transparent',
-              transition: 'background 0.2s',
-              fontWeight: 400,
-              backdropFilter: showBg ? 'blur(12px)' : undefined,
-              WebkitBackdropFilter: showBg ? 'blur(12px)' : undefined,
-            }}
-          >
-            {data.title || formatDomain(data.url)}
-          </div>
-        )}
+  return (
+    <div className="w-[400px] bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+      <Handle type="target" position={Position.Top} className="w-3 h-3" />
+      
+      <div className="w-full h-[300px] relative">
+        <iframe
+          src={url}
+          className="w-full h-full"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
+          loading="eager"
+          referrerPolicy="no-referrer"
+        />
       </div>
-    );
-  }
-
-  // --- PREVIEW MODE: Full preview (existing logic) ---
-  // (Keep your current preview logic here, but for now, it's not used)
-
-  return null;
+      
+      <div className="p-3 border-t border-gray-200">
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+            <img 
+              src={`https://www.google.com/s2/favicons?domain=${url}&sz=32`}
+              alt="Website Icon"
+              className="w-4 h-4"
+            />
+          </div>
+          <h3 className="text-sm font-medium text-gray-900 truncate">
+            {hostname}
+          </h3>
+        </div>
+        <div className="mt-1 text-xs text-gray-500">
+          Added on {data.createdAt}
+        </div>
+      </div>
+      
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3" />
+    </div>
+  );
 };
 
 export default URLWidget; 
