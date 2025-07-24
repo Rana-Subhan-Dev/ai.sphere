@@ -1,0 +1,12 @@
+export { default as AppWidget } from './AppWidget';
+export { default as FileWidget } from './FileWidget';
+export { default as InfoActionWidget } from './InfoActionWidget';
+export { default as NoteWidget } from './NoteWidget';
+export { default as ObjectWidget } from './ObjectWidget';
+export { default as ShapeWidget } from './ShapeWidget';
+export { default as TaskWidget } from './TaskWidget';
+export { default as TextWidget } from './TextWidget';
+export { default as URLWidget } from './URLWidget';
+export { default as AgentWidget } from './AgentWidget';
+export { default as SphereWidget } from './SphereWidget';
+export { default as SpaceWidget } from './SpaceWidget'; 

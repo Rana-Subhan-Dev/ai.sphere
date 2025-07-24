@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  
+  /* Globe component custom colors */
+  --color-globe-bg: #ffffff;
+  --color-globe-border: #e2e8f0;
+  --color-tooltip-bg: rgba(255, 255, 255, 0.95);
+  --color-tooltip-border: rgba(226, 232, 240, 0.8);
+  
+  /* Globe component custom spacing */
+  --spacing-480: 30rem;
+  
+  /* Globe component custom border widths */
+  --border-width-1.5: 1.5px;
+  --border-width-1.2: 1.2px;
+  
+  /* Globe component custom shadows */
+  --shadow-globe: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-mini-node: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-mini-node-hover: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+  --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  
+  /* Globe component custom backdrop blur */
+  --backdrop-blur-10: blur(10px);
+}
+
+/* Custom utilities for Globe component */
+.w-480 {
+  width: var(--spacing-480);
+}
+
+.h-480 {
+  height: var(--spacing-480);
+}
+
+.border-1\.5 {
+  border-width: var(--border-width-1.5);
+}
+
+.border-1\.2 {
+  border-width: var(--border-width-1.2);
+}
+
+.shadow-globe {
+  box-shadow: var(--shadow-globe);
+}
+
+.shadow-mini-node {
+  box-shadow: var(--shadow-mini-node);
+}
+
+.shadow-mini-node-hover {
+  box-shadow: var(--shadow-mini-node-hover);
+}
+
+.shadow-tooltip {
+  box-shadow: var(--shadow-tooltip);
+}
+
+.backdrop-blur-10 {
+  backdrop-filter: var(--backdrop-blur-10);
+}
+
+.bg-globe-bg {
+  background-color: var(--color-globe-bg);
+}
+
+.border-globe-border {
+  border-color: var(--color-globe-border);
+}
+
+.bg-tooltip-bg {
+  background-color: var(--color-tooltip-bg);
+}
+
+.border-tooltip-border {
+  border-color: var(--color-tooltip-border);
+}
+
+/* Hide scrollbars */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, and Opera */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    
+    /* Dark mode adjustments for Globe component */
+    --color-globe-bg: #1e293b;
+    --color-globe-border: #334155;
+    --color-tooltip-bg: rgba(30, 41, 59, 0.95);
+    --color-tooltip-border: rgba(51, 65, 85, 0.8);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* SpaceCanvas grid optimization to prevent transparency glitches during zoom */
+.space-canvas-grid {
+  opacity: 1 !important;
+  will-change: auto;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: none !important;
+}
+
+/* ReactFlow background pattern stability */
+.react-flow__background-pattern {
+  opacity: 1 !important;
+  will-change: auto;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  transition: none !important;
+}
+
+/* Prevent background flickering during zoom operations */
+.react-flow__viewport {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.react-flow__background {
+  will-change: auto;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  opacity: 1 !important;
+}
+
+/* Custom animations for onboarding flow */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-bottom {
+  animation: slideInFromBottom 0.5s ease-out 0.3s both;
+}
+
+.animate-zoom-in {
+  animation: zoomIn 0.3s ease-out 0.1s both;
+}
