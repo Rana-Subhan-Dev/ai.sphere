@@ -350,6 +350,7 @@ export default function Home() {
         isVisible={uploadModalVisible}
         onClose={() => setUploadModalVisible(false)}
         onUploadSuccess={handleUploadSuccess}
+        defaultCollectionName={selectedNode?.name}
       />
     </div>
   );

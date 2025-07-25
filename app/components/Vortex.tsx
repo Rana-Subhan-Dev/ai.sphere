@@ -702,7 +702,7 @@ const VortexContent: React.FC<{
           isVisible={props.chatVisible}
           onClose={props.onChatClose}
           isOpening={props.chatOpening}
-          selectedCollection={props.selectedNode?.name}
+          selectedCollection={props.selectedNode?.id}
           pendingMessage={props.pendingMessage}
         />
       </div>

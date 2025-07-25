@@ -13,25 +13,44 @@ interface CollectionNode {
   collectionName: string;
   lat: number;
   lon: number;
+  createdAt: string;
 }
 
 // Generate random position for nodes around the sphere
 function generateRandomPosition(): { lat: number; lon: number } {
-  const lat = (Math.random() - 0.5) * 160; // -80 to +80 degrees
+  const lat = (Math.random() - 0.5) * 180; // -90 to +90 degrees (full vertical range)
   const lon = (Math.random() - 0.5) * 360; // -180 to +180 degrees
+  return { lat, lon };
+}
+
+// Function to generate consistent position based on collection name
+function generateConsistentPosition(collectionName: string): { lat: number; lon: number } {
+  // Create a simple hash from the collection name
+  let hash = 0;
+  for (let i = 0; i < collectionName.length; i++) {
+    const char = collectionName.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Use hash to generate consistent lat/lon
+  const lat = ((Math.abs(hash) % 180) - 90); // -90 to +90
+  const lon = ((Math.abs(hash * 2) % 360) - 180); // -180 to +180
+  
   return { lat, lon };
 }
 
 // Convert collection names to nodes
 function createNodesFromCollections(collections: UserCollection[]): CollectionNode[] {
   return collections.map((collection) => {
-    const position = generateRandomPosition();
+    const position = generateConsistentPosition(collection.name);
     return {
-      id: `collection_${collection.name}_${collection.document_count}`,
-      name: `${collection.name} (${collection.document_count} items)`,
+      id: `node_${collection.name}`, // Unique ID with prefix
+      name: collection.name,
       collectionName: collection.name,
       lat: position.lat,
       lon: position.lon,
+      createdAt: collection.created_at,
     };
   });
 }
@@ -86,6 +105,63 @@ function useBounceZoom(controlsRef: React.RefObject<any>) {
     
     lastDistance.current = currentDistance;
   });
+}
+
+// Function to focus camera on a specific lat/lon position
+function useFocusOnPosition(controlsRef: React.RefObject<any>) {
+  const { camera } = useThree();
+  
+  return useCallback((lat: number, lon: number) => {
+    if (!controlsRef.current) return;
+    
+    const controls = controlsRef.current;
+    const [targetX, targetY, targetZ] = latLonToVec3(lat, lon, 1.3);
+    
+    // Calculate the angle to rotate the camera
+    const targetAngleY = Math.atan2(targetX, targetZ);
+    const targetAngleX = Math.atan2(targetY, Math.sqrt(targetX * targetX + targetZ * targetZ));
+    
+    const startRotationY = Math.atan2(camera.position.x, camera.position.z);
+    const startRotationX = Math.atan2(camera.position.y, Math.sqrt(camera.position.x * camera.position.x + camera.position.z * camera.position.z));
+    
+    // Keep track of start position
+    const startPos = camera.position.clone();
+    const distance = startPos.length();
+    
+    // Animate to new position
+    let startTime = Date.now();
+    const duration = 1000; // 1 second animation
+    
+    function animate() {
+      const now = Date.now();
+      const progress = Math.min((now - startTime) / duration, 1);
+      const easeProgress = progress < .5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress; // Smooth easing
+      
+      // Interpolate angles
+      const currentRotY = startRotationY + (targetAngleY - startRotationY) * easeProgress;
+      const currentRotX = startRotationX + (targetAngleX - startRotationX) * easeProgress;
+      
+      // Convert angles back to position
+      const sinY = Math.sin(currentRotY);
+      const cosY = Math.cos(currentRotY);
+      const sinX = Math.sin(currentRotX);
+      const cosX = Math.cos(currentRotX);
+      
+      camera.position.set(
+        distance * cosX * sinY,
+        distance * sinX,
+        distance * cosX * cosY
+      );
+      
+      camera.lookAt(0, 0, 0);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    }
+    
+    animate();
+  }, []);
 }
 
 // Custom hook for trackpad and pinch gestures
@@ -190,7 +266,7 @@ function useCustomGestures(controlsRef: React.RefObject<any>) {
       domElement.removeEventListener('touchmove', handleTouchMove);
       domElement.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [controlsRef, camera]);
+  }, []);
 }
 
 // Tooltip component
@@ -245,12 +321,22 @@ const GlobeScene: React.FC<{
   hoveredNode: string | null;
   setHoveredNode: (nodeId: string | null) => void;
   nodes: CollectionNode[];
-}> = ({ onNodeClick, hoveredNode, setHoveredNode, nodes }) => {
+  focusOnLatestNode?: boolean;
+}> = ({ onNodeClick, hoveredNode, setHoveredNode, nodes, focusOnLatestNode }) => {
   const controlsRef = useRef<any>(null);
   
   useBounceZoom(controlsRef);
   useCustomGestures(controlsRef);
+  const focusOnPosition = useFocusOnPosition(controlsRef);
   
+  // Focus on latest node when requested
+  useEffect(() => {
+    if (focusOnLatestNode && nodes.length > 0) {
+      const latestNode = nodes[nodes.length - 1];
+      focusOnPosition(latestNode.lat, latestNode.lon);
+    }
+  }, [focusOnLatestNode, nodes, focusOnPosition]);
+
   const handleNodeClick = (node: CollectionNode) => {
     // Pass collection name to open collection view
     onNodeClick(node.collectionName, node.name);
@@ -292,23 +378,24 @@ const GlobeScene: React.FC<{
       
       {/* Collection Nodes - All Gray */}
       {nodes.map((node) => {
-        const pos = latLonToVec3(node.lat, node.lon, 1.31);
+        const [x, y, z] = latLonToVec3(node.lat, node.lon, 1.3);
+        const isHovered = hoveredNode === node.id;
         
         return (
           <mesh 
             key={node.id} 
-            position={pos} 
+            position={[x, y, z]} 
             castShadow 
             receiveShadow
             onClick={() => handleNodeClick(node)}
             onPointerEnter={() => setHoveredNode(node.id)}
             onPointerLeave={() => setHoveredNode(null)}
           >
-            <sphereGeometry args={[0.11, 32, 32]} />
+            <sphereGeometry args={[0.04, 16, 16]} />
             <meshStandardMaterial 
               color="#bdbdbd" 
-              metalness={0.1} 
-              roughness={0.3} 
+              emissive="#bdbdbd"
+              emissiveIntensity={isHovered ? 0.5 : 0}
             />
           </mesh>
         );
@@ -316,22 +403,34 @@ const GlobeScene: React.FC<{
       
       <OrbitControls
         ref={controlsRef}
-        makeDefault
+        enableZoom={true}
         enablePan={false}
-        enableZoom={false}
         enableRotate={true}
-        minDistance={0.1}
-        maxDistance={8.8}
-        enableDamping
-        dampingFactor={0.08}
-        rotateSpeed={0.8}
-        zoomSpeed={0}
-        zoomToCursor={false}
-        autoRotateSpeed={0}
+        minDistance={2}
+        maxDistance={6}
+        rotateSpeed={0.5}
+        zoomSpeed={0.5}
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI}
+        target={[0, 0, 0]} // Fix target to center
+        enableDamping={true}
+        dampingFactor={0.05}
         screenSpacePanning={false}
-        minPolarAngle={Math.PI / 2}
-        maxPolarAngle={Math.PI / 2}
       />
+
+      {/* Focus animation overlay */}
+      {focusOnLatestNode && (
+        <group position={[0, 0, 0]}>
+          <mesh>
+            <sphereGeometry args={[1.35, 32, 32]} />
+            <meshBasicMaterial
+              color="#ffffff"
+              transparent
+              opacity={0.1}
+            />
+          </mesh>
+        </group>
+      )}
     </>
   );
 };
@@ -417,48 +516,131 @@ const Globe3D: React.FC<{
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [nodes, setNodes] = useState<CollectionNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [shouldFocusLatest, setShouldFocusLatest] = useState(false);
+  const previousCollectionsRef = useRef<UserCollection[]>([]);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isFetchingRef = useRef(false);
+
   // Get global drag state for scaling animation
   const { isDragging } = useDragDrop();
-  
-  // Fetch collections data
+
+  // Debounced fetch collections data
   const fetchCollections = useCallback(async () => {
-    const authData = getAuthData();
-    if (!authData?.user?.id) {
-      console.log('No user authenticated');
+    if (isFetchingRef.current) {
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const collections = await getUserCollections(authData.user.id);
-      if (collections && collections.length > 0) {
-        const collectionNodes = createNodesFromCollections(collections);
-        setNodes(collectionNodes);
-        console.log(`Loaded ${collectionNodes.length} collection nodes`);
-      } else {
-        setNodes([]);
-        console.log('No collections found');
-      }
-    } catch (error) {
-      console.error('Error fetching collections:', error);
-      setNodes([]);
-    } finally {
-      setIsLoading(false);
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
     }
+
+    fetchTimeoutRef.current = setTimeout(async () => {
+      isFetchingRef.current = true;
+      const authData = getAuthData();
+      if (!authData?.user?.id) {
+        console.log('No user authenticated');
+        isFetchingRef.current = false;
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const collections = await getUserCollections(authData.user.id);
+        if (collections && collections.length > 0) {
+          // Sort collections by creation date to find the latest
+          const sortedCollections = [...collections].sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          
+          // Get the latest collection
+          const latestCollection = sortedCollections[0];
+          
+          // Create nodes with consistent positions
+          const collectionNodes = createNodesFromCollections(collections);
+          setNodes(collectionNodes);
+          
+          // Check if we have new collections compared to previous fetch
+          const previousCollectionNames = previousCollectionsRef.current.map(c => c.name);
+          console.log('Previous collections:', previousCollectionNames);
+          console.log('Current collections:', sortedCollections.map(c => c.name));
+          
+          const newCollections = sortedCollections.filter(
+            collection => !previousCollectionNames.includes(collection.name)
+          );
+          
+          console.log('New collections found:', newCollections.map(c => c.name));
+          
+          // If there are new collections, focus on the most recent one
+          if (newCollections.length > 0) {
+            const newestCollection = newCollections[0]; // Already sorted by date
+            const nodeToFocus = collectionNodes.find(
+              node => node.name === newestCollection.name
+            );
+            
+            console.log('Looking for node with name:', newestCollection.name);
+            console.log('Available nodes:', collectionNodes.map(n => n.name));
+            console.log('Found node to focus:', nodeToFocus);
+            
+            if (nodeToFocus) {
+              console.log('🎯 FOCUSING ON:', newestCollection.name, 'at position:', nodeToFocus.lat, nodeToFocus.lon);
+              setShouldFocusLatest(true);
+              setHoveredNode(nodeToFocus.id);
+              setTimeout(() => {
+                setHoveredNode(null);
+              }, 2000);
+            }
+          } else {
+            console.log('No new collections to focus on');
+          }
+
+          // Update previous collections reference
+          previousCollectionsRef.current = sortedCollections;
+          console.log(`Loaded ${collectionNodes.length} collection nodes`);
+        } else {
+          setNodes([]);
+          previousCollectionsRef.current = [];
+        }
+      } catch (error) {
+        console.error('Error fetching collections:', error);
+        setNodes([]);
+        previousCollectionsRef.current = [];
+      } finally {
+        setIsLoading(false);
+        isFetchingRef.current = false;
+      }
+    }, 300);
   }, []);
 
-  // Initial load
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Initial load of collections
   useEffect(() => {
     fetchCollections();
   }, [fetchCollections]);
 
-  // Refresh when onCollectionUpdate is called
+  // Refresh collections when update is triggered
   useEffect(() => {
     if (onCollectionUpdate) {
       fetchCollections();
     }
   }, [onCollectionUpdate, fetchCollections]);
+
+  // Reset focus flag after animation
+  useEffect(() => {
+    if (shouldFocusLatest) {
+      const timer = setTimeout(() => {
+        setShouldFocusLatest(false);
+      }, 1500); // Slightly longer than animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [shouldFocusLatest]);
   
   // Throttled mouse position update to prevent excessive re-renders
   const updateMousePosition = useCallback((x: number, y: number) => {
@@ -538,6 +720,7 @@ const Globe3D: React.FC<{
               hoveredNode={hoveredNode}
               setHoveredNode={setHoveredNode}
               nodes={nodes}
+              focusOnLatestNode={shouldFocusLatest}
             />
           </Canvas>
         </div>

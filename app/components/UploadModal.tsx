@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Upload, FileText, Link as LinkIcon } from 'lucide-react';
 import { uploadToCollection, getAuthData } from '../../lib/api';
 
@@ -8,12 +8,13 @@ interface UploadModalProps {
   isVisible: boolean;
   onClose: () => void;
   onUploadSuccess: () => void;
+  defaultCollectionName?: string;
 }
 
 type UploadType = 'file' | 'text' | 'url';
 type DataType = 'pdf' | 'image' | 'text' | 'url';
 
-export default function UploadModal({ isVisible, onClose, onUploadSuccess }: UploadModalProps) {
+export default function UploadModal({ isVisible, onClose, onUploadSuccess, defaultCollectionName }: UploadModalProps) {
   const [uploadType, setUploadType] = useState<UploadType>('file');
   const [textContent, setTextContent] = useState('');
   const [urlContent, setUrlContent] = useState('');
@@ -23,17 +24,24 @@ export default function UploadModal({ isVisible, onClose, onUploadSuccess }: Upl
   const [collectionName, setCollectionName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Set default collection name when modal opens
+  useEffect(() => {
+    if (isVisible && defaultCollectionName) {
+      setCollectionName(defaultCollectionName);
+    }
+  }, [isVisible, defaultCollectionName]);
+
   const resetForm = useCallback(() => {
     setUploadType('file');
     setTextContent('');
     setUrlContent('');
     setSelectedFile(null);
     setError(null);
-    setCollectionName('');
+    setCollectionName(defaultCollectionName || '');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, []);
+  }, [defaultCollectionName]);
 
   const handleClose = useCallback(() => {
     if (!isUploading) {
