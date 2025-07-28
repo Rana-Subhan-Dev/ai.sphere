@@ -391,7 +391,7 @@ const GlobeScene: React.FC<{
             onPointerEnter={() => setHoveredNode(node.id)}
             onPointerLeave={() => setHoveredNode(null)}
           >
-            <sphereGeometry args={[0.04, 16, 16]} />
+            <sphereGeometry args={[0.08, 16, 16]} />
             <meshStandardMaterial 
               color="#bdbdbd" 
               emissive="#bdbdbd"

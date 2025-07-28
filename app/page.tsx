@@ -332,7 +332,10 @@ export default function Home() {
             onSphereWindowVisibleChange={setSphereWindowVisible}
             isNodeSelected={selectedNode !== null}
             onWebViewStateChange={handleWebViewStateChange}
-            onPlusClick={() => setUploadModalVisible(true)}
+            onPlusClick={() => {
+              setControlPanelTab(selectedNode ? 'feed' : 'new');
+              setControlPanelVisible(true);
+            }}
             collectionUpdateTrigger={collectionUpdateTrigger}
           />
         ) : (
@@ -344,6 +347,8 @@ export default function Home() {
         isVisible={controlPanelVisible}
         onClose={() => setControlPanelVisible(false)}
         initialTab={controlPanelTab}
+        collectionName={selectedNode?.name} // Pass collection name when in a collection
+        onSuccess={handleUploadSuccess} // Use same success handler
       />
 
       <UploadModal

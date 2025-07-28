@@ -31,6 +31,9 @@ import InfoActionWidget from './widgets/InfoActionWidget';
 import AgentWidget from './widgets/AgentWidget';
 import SphereWidget from './widgets/SphereWidget';
 import SpaceWidget from './widgets/SpaceWidget';
+import SmartBar from '../SmartBar';
+import ChatView from '../ChatView';
+import ControlPanel from '../NewPopup';
 
 import { CanvasDropZone } from '../DragDrop';
 import { useDragDrop } from '../DragDrop';
@@ -62,8 +65,8 @@ interface SpaceCanvasProps {
 const createNodesFromFiles = (files: any[]): Node[] => {
   return files.map((file, index) => {
     // Calculate grid position
-    const columns = 4;
-    const spacing = 250;
+    const columns = 6;
+    const spacing = 120;
     const x = (index % columns) * spacing;
     const y = Math.floor(index / columns) * spacing;
 
@@ -121,10 +124,16 @@ const createNodesFromFiles = (files: any[]): Node[] => {
 };
 
 const SpaceCanvasInner: React.FC<SpaceCanvasProps> = ({ spaceName, onClose }) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const initialNodes: Node[] = [];
+  const initialEdges: Edge[] = [];
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [smartBarState, setSmartBarState] = useState<'collapsed' | 'normal' | 'expanded'>('collapsed');
+  const [chatVisible, setChatVisible] = useState(false);
+  const [chatOpening, setChatOpening] = useState(false);
+  const [controlPanelVisible, setControlPanelVisible] = useState(false);
   
   // Get global drag state for widget opacity
   const { isDragging, isOverDropZone, dropZone } = useDragDrop();
@@ -163,6 +172,33 @@ const SpaceCanvasInner: React.FC<SpaceCanvasProps> = ({ spaceName, onClose }) =>
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
   );
+
+  // Handle chat state changes
+  const handleChatStateChange = useCallback((isVisible: boolean) => {
+    if (isVisible) {
+      setChatOpening(true);
+      setChatVisible(true);
+      setTimeout(() => {
+        setChatOpening(false);
+      }, 500);
+    } else {
+      setChatVisible(false);
+    }
+  }, []);
+
+  // Handle control panel success
+  const handleControlPanelSuccess = useCallback(() => {
+    // Refresh the collection data when new content is added
+    const authData = getAuthData();
+    if (authData?.user?.id) {
+      getUserCollectionData(authData.user.id, spaceName).then((data) => {
+        if (data) {
+          const fileNodes = createNodesFromFiles(data.files);
+          setNodes(fileNodes);
+        }
+      });
+    }
+  }, [spaceName, setNodes]);
 
   return (
     <div 
@@ -228,6 +264,38 @@ const SpaceCanvasInner: React.FC<SpaceCanvasProps> = ({ spaceName, onClose }) =>
           <Controls />
         </ReactFlow>
       )}
+
+      {/* Smart Bar */}
+      <div className="absolute bottom-0 left-0 right-0 flex justify-center">
+                  <SmartBar
+            onStateChange={setSmartBarState}
+            onHoverChange={() => {}}
+            forceHidden={false}
+            interactionPreviewVisible={false}
+            collectionName={spaceName}
+            onSendMessage={(message) => {
+              handleChatStateChange(true);
+            }}
+            onPlusClick={() => setControlPanelVisible(true)}
+          />
+      </div>
+
+      {/* Chat View */}
+      <ChatView
+        isVisible={chatVisible}
+        onClose={() => handleChatStateChange(false)}
+        isOpening={chatOpening}
+        selectedCollection={spaceName}
+      />
+
+      {/* Control Panel */}
+      <ControlPanel
+        isVisible={controlPanelVisible}
+        onClose={() => setControlPanelVisible(false)}
+        initialTab="feed"
+        collectionName={spaceName}
+        onSuccess={handleControlPanelSuccess}
+      />
     </div>
   );
 };

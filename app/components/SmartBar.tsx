@@ -12,6 +12,8 @@ interface SmartBarProps {
   onHover?: (isHovering: boolean) => void;
   interactionPreviewVisible?: boolean;
   onSendMessage?: (message: string) => void;
+  collectionName?: string;
+  onPlusClick?: () => void;
 }
 
 const SmartBar: React.FC<SmartBarProps> = ({
@@ -20,7 +22,9 @@ const SmartBar: React.FC<SmartBarProps> = ({
   forceHidden,
   onHover,
   interactionPreviewVisible = false,
-  onSendMessage
+  onSendMessage,
+  collectionName,
+  onPlusClick
 }) => {
   const [state, setState] = useState<'expanded' | 'collapsed' | 'normal'>('collapsed');
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -310,6 +314,7 @@ const SmartBar: React.FC<SmartBarProps> = ({
                   height={inputBarHeight}
                   onHeightChange={setInputBarHeight}
                   onSendMessage={onSendMessage}
+                  onPlusClick={onPlusClick}
                 />
               </div>
             </div>

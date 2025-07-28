@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowUp, Mic, Paperclip } from 'lucide-react';
+import { ArrowUp, Mic, Paperclip, Plus } from 'lucide-react';
 
 interface SmartInputBarProps {
   state: 'collapsed' | 'normal' | 'expanded';
@@ -11,6 +11,7 @@ interface SmartInputBarProps {
   height?: number;
   onHeightChange?: (height: number) => void;
   onSendMessage?: (message: string) => void;
+  onPlusClick?: () => void;
 }
 
 export default function SmartInputBar({ 
@@ -20,7 +21,8 @@ export default function SmartInputBar({
   inputRef,
   height = 80,
   onHeightChange,
-  onSendMessage
+  onSendMessage,
+  onPlusClick
 }: SmartInputBarProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartY = useRef(0);
@@ -38,8 +40,11 @@ export default function SmartInputBar({
     if (inputText.trim() && onSendMessage) {
       onSendMessage(inputText.trim());
       setInputText('');
+    } else if (!inputText.trim() && onPlusClick) {
+      // When no text, act as plus button
+      onPlusClick();
     }
-  }, [inputText, onSendMessage, setInputText]);
+  }, [inputText, onSendMessage, setInputText, onPlusClick]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -276,16 +281,22 @@ export default function SmartInputBar({
                     <Mic size={18} className="text-black/30 hover:text-black/60" />
                   </button>
                 )}
-                {inputText.trim() && (
-                  <button 
-                    className="w-7 h-7 p-1.5 rounded-full flex justify-center items-center bg-black opacity-100 hover:bg-black/80 cursor-pointer scale-100 transition-all duration-150 ease-out"
-                    aria-label="Send"
-                    tabIndex={0}
-                    onClick={handleSendClick}
-                  >
+                <button 
+                  className={`w-7 h-7 p-1.5 rounded-full flex justify-center items-center transition-all duration-150 ease-out cursor-pointer ${
+                    inputText.trim() 
+                      ? 'bg-black opacity-100 hover:bg-black/80' 
+                      : 'bg-black/5 hover:bg-black/10'
+                  }`}
+                  aria-label={inputText.trim() ? "Send" : "Add"}
+                  tabIndex={0}
+                  onClick={handleSendClick}
+                >
+                  {inputText.trim() ? (
                     <ArrowUp size={14} className="text-white" />
-                  </button>
-                )}
+                  ) : (
+                    <Plus size={14} className="text-black/60" />
+                  )}
+                </button>
               </div>
             </div>
           </div>

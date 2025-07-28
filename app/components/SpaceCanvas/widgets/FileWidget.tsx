@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { FileIcon, ImageIcon, FileTextIcon, FileType2Icon, Download } from 'lucide-react';
+import { FileIcon, ImageIcon, FileTextIcon, FileType2Icon } from 'lucide-react';
 
 interface FileWidgetProps {
   data: {
@@ -15,8 +15,8 @@ interface FileWidgetProps {
 }
 
 const FileWidget: React.FC<FileWidgetProps> = ({ data }) => {
-  const handleDownload = () => {
-    if (data.fileURL) {
+  const handleClick = () => {
+    if (data.fileURL && data.fileType !== 'text') {
       const link = document.createElement('a');
       link.href = data.fileURL;
       link.download = data.fileName;
@@ -26,76 +26,80 @@ const FileWidget: React.FC<FileWidgetProps> = ({ data }) => {
     }
   };
 
-  const renderContent = () => {
-    switch (data.fileType) {
-      case 'image':
-        return (
-          <div 
-            className="w-full h-48 relative group cursor-pointer" 
-            onClick={handleDownload}
-          >
-            <img 
-              src={data.fileURL} 
-              alt={data.fileName}
-              className="w-full h-full object-cover rounded-t-lg"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors">
-              <Download className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          </div>
-        );
-      
-      case 'pdf':
-        return (
-          <div 
-            className="w-full h-48 flex flex-col items-center justify-center bg-gray-50 rounded-t-lg cursor-pointer hover:bg-gray-100 transition-colors relative group" 
-            onClick={handleDownload}
-          >
-            <FileType2Icon className="w-12 h-12 text-red-500" />
-            <p className="mt-2 text-sm text-gray-600">Download PDF</p>
-            <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/5 transition-colors">
-              <Download className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          </div>
-        );
-      
-      case 'text':
-        return (
-          <div className="w-full h-48 bg-gray-50 rounded-t-lg p-4 overflow-auto">
-            <pre className="text-xs font-mono text-gray-600 whitespace-pre-wrap break-words">
-              {data.fileURL || 'No content available'}
-            </pre>
-          </div>
-        );
-      
-      default:
-        return (
-          <div className="w-full h-48 flex flex-col items-center justify-center bg-gray-50 rounded-t-lg">
-            <FileIcon className="w-12 h-12 text-gray-500" />
-            <p className="mt-2 text-sm text-gray-600">Unknown file type</p>
-          </div>
-        );
+  const getDisplayName = () => {
+    // Show shorter names for better display
+    const name = data.fileName.length > 15 
+      ? data.fileName.substring(0, 12) + '...' 
+      : data.fileName;
+    return name;
+  };
+
+  const renderPreview = () => {
+    if (data.fileType === 'image' && data.fileURL) {
+      return (
+        <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center shadow-md">
+          <img 
+            src={data.fileURL} 
+            alt={data.fileName}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      );
     }
+    
+    if (data.fileType === 'text' && data.fileURL) {
+      return (
+        <div className="w-16 h-16 rounded-xl bg-green-50 border-2 border-green-200 flex items-center justify-center p-2 shadow-md">
+          <div className="text-xs text-green-700 text-center leading-tight overflow-hidden">
+            {data.fileURL?.substring(0, 50) || 'Text file'}
+          </div>
+        </div>
+      );
+    }
+    
+    // Default icon view for PDFs and other files
+    const iconColor = {
+      'pdf': 'bg-red-50 border-red-200',
+      'text': 'bg-green-50 border-green-200',
+      'image': 'bg-blue-50 border-blue-200'
+    }[data.fileType] || 'bg-gray-50 border-gray-200';
+    
+    const icon = {
+      'pdf': <FileType2Icon className="w-8 h-8 text-red-500" />,
+      'text': <FileTextIcon className="w-8 h-8 text-green-500" />,
+      'image': <ImageIcon className="w-8 h-8 text-blue-500" />
+    }[data.fileType] || <FileIcon className="w-8 h-8 text-gray-500" />;
+    
+    return (
+      <div className={`w-16 h-16 rounded-xl ${iconColor} border-2 flex items-center justify-center shadow-md`}>
+        {icon}
+      </div>
+    );
   };
 
   return (
-    <div className="w-[200px] bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-      <Handle type="target" position={Position.Top} className="w-3 h-3" />
+    <div className="flex flex-col items-center space-y-2 p-2 group">
+      <Handle type="target" position={Position.Top} className="w-2 h-2 opacity-0" />
       
-      {renderContent()}
+      {/* App Icon Style Preview */}
+      <div 
+        className="cursor-pointer transform transition-all duration-200 group-hover:scale-105"
+        onClick={handleClick}
+      >
+        {renderPreview()}
+      </div>
       
-      <div className="p-3 border-t border-gray-200">
-        <h3 className="text-sm font-medium text-gray-900 truncate" title={data.fileName}>
-          {data.fileName}
-        </h3>
-        <div className="mt-1 flex items-center text-xs text-gray-500 space-x-2">
-          <span>{data.fileSize}</span>
-          <span>•</span>
-          <span>{data.createdAt}</span>
+      {/* File Name */}
+      <div className="text-center">
+        <div className="text-xs font-medium text-gray-700 leading-tight">
+          {getDisplayName()}
+        </div>
+        <div className="text-xs text-gray-400 mt-1">
+          {data.fileType.toUpperCase()}
         </div>
       </div>
       
-      <Handle type="source" position={Position.Bottom} className="w-3 h-3" />
+      <Handle type="source" position={Position.Bottom} className="w-2 h-2 opacity-0" />
     </div>
   );
 };

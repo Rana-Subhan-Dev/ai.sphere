@@ -2,11 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Plus, FilePlus, Globe, Layers, Search, Settings, Link2, Sparkles } from 'lucide-react';
+import { createNewCollection, uploadToCollection, uploadFileToCollection, getAuthData } from '../../lib/api';
 
 interface ControlPanelProps {
   isVisible: boolean;
   onClose: () => void;
   initialTab?: string;
+  collectionName?: string; // When in a collection, this will be set
+  onSuccess?: () => void; // Callback for when action succeeds
 }
 
 const TABS = [
@@ -88,7 +91,7 @@ const TAB_ICONS: Record<string, (active: boolean) => React.ReactNode> = {
   settings: (active) => <Settings size={13} className={active ? 'mr-1 text-black/80' : 'mr-1 text-black/30'} />, 
 };
 
-export default function ControlPanel({ isVisible, onClose, initialTab }: ControlPanelProps) {
+export default function ControlPanel({ isVisible, onClose, initialTab, collectionName, onSuccess }: ControlPanelProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [inputText, setInputText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -350,16 +353,193 @@ export default function ControlPanel({ isVisible, onClose, initialTab }: Control
     }
   }, [isVisible, handleClose, isDragging]);
 
-  const handleOptionSelect = (option: typeof tabConfig.options[0]) => {
+  const handleOptionSelect = async (option: typeof tabConfig.options[0]) => {
     console.log('Selected option:', option);
-    handleClose();
+    
+    const authData = getAuthData();
+    if (!authData?.user?.id) {
+      setError('User not authenticated');
+      return;
+    }
+
+    if (collectionName && activeTab === 'feed') {
+      // We're in a collection - handle different upload types
+      if (option.title.toLowerCase().includes('upload file')) {
+        // Trigger file input for file upload
+        fileInputRef.current?.click();
+        return;
+      } else if (option.title.toLowerCase().includes('paste link') || option.title.toLowerCase().includes('url')) {
+        // For links, just focus the input field
+        inputRef.current?.focus();
+        setInputText('https://');
+        return;
+      } else if (option.title.toLowerCase().includes('import dataset')) {
+        // For datasets, trigger file input
+        fileInputRef.current?.click();
+        return;
+      } else if (option.title.toLowerCase().includes('flashcard')) {
+        // For flashcards, focus input for text
+        inputRef.current?.focus();
+        setInputText('');
+        return;
+      }
+    } else if (!collectionName && activeTab === 'new') {
+      // We're on main sphere - create new collection
+      if (inputText.trim()) {
+        await handleCreateCollection();
+      } else {
+        // Focus input for collection name
+        inputRef.current?.focus();
+        return;
+      }
+    }
   };
 
-  const handleSendMessage = () => {
-    if (inputText.trim()) {
-      console.log('Sending:', inputText);
-      setInputText('');
-      handleClose();
+  const handleFileUpload = async (file: File) => {
+    const authData = getAuthData();
+    if (!authData?.user?.id || !collectionName) {
+      setError('User not authenticated or no collection selected');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Determine data type based on file extension
+      let dataType: 'pdf' | 'image' | 'text' | 'url' = 'text';
+      const fileName = file.name.toLowerCase();
+      
+      if (fileName.endsWith('.pdf')) {
+        dataType = 'pdf';
+      } else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.gif') || fileName.endsWith('.webp')) {
+        dataType = 'image';
+      } else if (fileName.endsWith('.txt') || fileName.endsWith('.md') || fileName.endsWith('.csv') || fileName.endsWith('.json')) {
+        dataType = 'text';
+      }
+
+      const success = await uploadFileToCollection(
+        authData.user.id,
+        collectionName,
+        file,
+        dataType
+      );
+      
+      if (success) {
+        console.log('File uploaded successfully');
+        onSuccess?.();
+        setSelectedFile(null);
+        handleClose();
+      } else {
+        setError('File upload failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Error:', error);
+      if (error?.detail === 'Not Found') {
+        setError('API endpoint not found. Please check your connection.');
+      } else {
+        setError('An error occurred. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateCollection = async () => {
+    const authData = getAuthData();
+    if (!authData?.user?.id) {
+      setError('User not authenticated');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const success = await createNewCollection(authData.user.id, inputText);
+      
+      if (success) {
+        console.log('Collection created successfully');
+        onSuccess?.();
+        setInputText('');
+        handleClose();
+      } else {
+        setError('Collection creation failed. Please try a different name.');
+      }
+    } catch (error: any) {
+      console.error('Error:', error);
+      if (error?.detail === 'Not Found') {
+        setError('API endpoint not found. Please check your connection.');
+      } else {
+        setError('An error occurred. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim()) return;
+
+    const authData = getAuthData();
+    if (!authData?.user?.id) {
+      setError('User not authenticated');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (collectionName) {
+        // We're in a collection - use upload API for adding files/content
+        if (activeTab === 'feed') {
+          // Determine data type based on input
+          let dataType: 'pdf' | 'image' | 'text' | 'url' = 'text';
+          let content = inputText;
+          
+          // Check if it's a URL
+          if (inputText.startsWith('http://') || inputText.startsWith('https://')) {
+            dataType = 'url';
+          }
+          
+          const success = await uploadToCollection(
+            authData.user.id,
+            collectionName,
+            dataType,
+            undefined,
+            content
+          );
+          
+          if (success) {
+            console.log('Content uploaded successfully');
+            onSuccess?.();
+            setInputText('');
+            handleClose();
+          } else {
+            setError('Upload failed. Please try again.');
+          }
+        }
+      } else {
+        // We're on main sphere - create new collection
+        if (activeTab === 'new') {
+          await handleCreateCollection();
+        }
+      }
+    } catch (error: any) {
+      console.error('Error:', error);
+      if (error?.detail === 'Not Found') {
+        setError('API endpoint not found. Please check your connection.');
+      } else {
+        setError('An error occurred. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -486,35 +666,80 @@ export default function ControlPanel({ isVisible, onClose, initialTab }: Control
           <div 
             className="w-full p-3 left-0 top-[37px] absolute bg-[#fff]/[15%] rounded-tl-[10px] rounded-tr-[10px] border-b-[0.50px] border-black/10 backdrop-blur-lg flex flex-col justify-start items-center gap-4"
           >
+            {/* Error Message */}
+            {error && (
+              <div className="w-full px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm font-medium">{error}</p>
+              </div>
+            )}
+
+            {/* File Upload Progress */}
+            {selectedFile && (
+              <div className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-600 text-sm font-medium">
+                  Selected: {selectedFile.name}
+                </p>
+              </div>
+            )}
+
             <div className="self-stretch p-2.5 rounded-2xl inline-flex justify-start items-center gap-2.5 relative">
               <div className="relative flex flex-grow justify-start items-center gap-2.5 w-full">
                 <textarea 
                   ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  className="flex-1 w-full bg-transparent text-black/100 text-base font-normal font-['Neue_Montreal'] outline-none placeholder:text-black/30 resize-none transition-all duration-200 ease-out"
+                  onChange={(e) => {
+                    setInputText(e.target.value);
+                    setError(null); // Clear error when user types
+                  }}
+                  disabled={isLoading}
+                  className={`flex-1 w-full bg-transparent text-black/100 text-base font-normal font-['Neue_Montreal'] outline-none placeholder:text-black/30 resize-none transition-all duration-200 ease-out ${
+                    isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                   style={{ 
                     caretColor: 'rgba(0, 0, 0, 0.3)',
                     minHeight: '20px'
                   }}
-                  placeholder={tabConfig.placeholder}
+                  placeholder={collectionName ? 
+                    (activeTab === 'feed' ? 'Add content to collection...' : tabConfig.placeholder) :
+                    (activeTab === 'new' ? 'Enter unique sphere name...' : tabConfig.placeholder)
+                  }
                   rows={1}
                 />
               </div>
             </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.txt,.md,.csv,.json"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setSelectedFile(file);
+                  handleFileUpload(file);
+                }
+              }}
+              className="hidden"
+            />
 
             {/* Top right button - plus when empty, arrow when text */}
             <div className="right-[18px] top-[18px] absolute inline-flex justify-end items-center gap-2">
               <div className="flex justify-end items-center gap-2">
                 <button
                   onClick={inputText.trim() ? handleSendMessage : handleClose}
+                  disabled={isLoading}
                   className={`w-8 h-8 p-1.5 rounded-[82.35px] flex justify-center items-center gap-2.5 transition-all duration-300 ease-out ${
-                    inputText.trim() 
-                      ? 'bg-white/50 hover:bg-white/90 shadow-[inset_4px_-2px_8px_0px_rgba(0,0,0,0.125),_inset_-4px_4px_12px_0px_rgba(255,255,255,0.8),_0px_6px_20px_0px_rgba(0,0,0,0.05)]'
-                      : 'bg-black/[3.5%] hover:bg-black/5 shadow-none'
+                    isLoading 
+                      ? 'bg-gray-300 cursor-not-allowed'
+                      : inputText.trim() 
+                        ? 'bg-white/50 hover:bg-white/90 shadow-[inset_4px_-2px_8px_0px_rgba(0,0,0,0.125),_inset_-4px_4px_12px_0px_rgba(255,255,255,0.8),_0px_6px_20px_0px_rgba(0,0,0,0.05)]'
+                        : 'bg-black/[3.5%] hover:bg-black/5 shadow-none'
                   }`}
                 >
-                  {inputText.trim() ? (
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-black/30 border-t-transparent rounded-full animate-spin" />
+                  ) : inputText.trim() ? (
                     <ArrowUp size={16} className="text-black/30" />
                   ) : (
                     <Plus size={16} className="text-black/40" />

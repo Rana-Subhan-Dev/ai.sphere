@@ -145,7 +145,7 @@ export default function ChatView({
   return (
     <div 
       className={`
-        absolute inset-0 w-full h-full flex flex-col
+        fixed inset-0 w-full h-[calc(100vh-70px)] flex flex-col
         bg-white/10 backdrop-blur-[100px]
         rounded-lg z-[400]
         transition-all duration-500 ease-out

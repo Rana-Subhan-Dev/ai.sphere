@@ -179,20 +179,64 @@ export const uploadToCollection = async (
 
     const response = await fetch(`${API_BASE_URL}/dashboard/upload`, {
       method: 'POST',
+      headers: {
+        'accept': 'application/json',
+      },
       body: formData,
     });
 
     const data = await response.json();
     
-    if (response.ok && data.success) {
+    if (response.ok) {
       return data;
     }
     
     console.error('Upload failed:', data);
+    
+    // Throw error with detail for better error handling
+    if (data.detail) {
+      throw { detail: data.detail };
+    }
+    
     return null;
   } catch (error) {
     console.error('Error uploading:', error);
+    throw error; // Re-throw to let component handle it
+  }
+};
+
+// Create new collection
+export const createNewCollection = async (userId: string, collectionName: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/create_new_collection`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        collection_name: collectionName,
+      }),
+    });
+
+    const data = await response.json();
+    
+    if (response.ok) {
+      return data;
+    }
+    
+    console.error('Collection creation failed:', data);
+    
+    // Throw error with detail for better error handling
+    if (data.detail) {
+      throw { detail: data.detail };
+    }
+    
     return null;
+  } catch (error) {
+    console.error('Error creating collection:', error);
+    throw error; // Re-throw to let component handle it
   }
 };
 
@@ -218,6 +262,47 @@ export const getTextFileContent = async (fileId: string): Promise<string | null>
   } catch (error) {
     console.error('Error fetching text content:', error);
     return null;
+  }
+};
+
+// Upload file with proper file handling
+export const uploadFileToCollection = async (
+  userId: string,
+  collectionName: string,
+  file: File,
+  dataType: 'pdf' | 'image' | 'text' | 'url'
+): Promise<UploadResponse | null> => {
+  try {
+    const formData = new FormData();
+    formData.append('user_id', userId);
+    formData.append('collection_name', collectionName);
+    formData.append('data_type', dataType);
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE_URL}/dashboard/upload`, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    
+    if (response.ok) {
+      return data;
+    }
+    
+    console.error('File upload failed:', data);
+    
+    if (data.detail) {
+      throw { detail: data.detail };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
   }
 };
 
