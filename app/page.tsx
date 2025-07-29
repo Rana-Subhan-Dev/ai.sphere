@@ -8,6 +8,7 @@ import UploadModal from './components/UploadModal';
 import { AnimatePresence } from 'framer-motion';
 import { useRef } from 'react';
 import ControlPanel from './components/NewPopup';
+import CollectionDataModal from './components/CollectionDataModal';
 import { LogOut } from 'lucide-react';
 import { getAuthData } from '../lib/api';
 
@@ -38,12 +39,22 @@ export default function Home() {
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [collectionUpdateTrigger, setCollectionUpdateTrigger] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [collectionDataModalVisible, setCollectionDataModalVisible] = useState(false);
 
   // Check authentication status
   useEffect(() => {
     const authData = getAuthData();
     setIsAuthenticated(!!authData?.accessToken);
   }, [onboardingComplete]);
+
+  // Handle collection name click from DynamicIsland
+  const handleCollectionNameClick = useCallback((collectionName: string) => {
+    setCollectionDataModalVisible(true);
+  }, []);
+
+  const handleCollectionDataModalClose = useCallback(() => {
+    setCollectionDataModalVisible(false);
+  }, []);
 
   // Centralized hollow vortex state management
   const updateHollowVortex = useCallback((trigger: HollowVortexTrigger) => {
@@ -337,6 +348,7 @@ export default function Home() {
               setControlPanelVisible(true);
             }}
             collectionUpdateTrigger={collectionUpdateTrigger}
+            onCollectionNameClick={handleCollectionNameClick}
           />
         ) : (
           <OnboardingFlow onComplete={handleOnboardingComplete} />
@@ -357,6 +369,15 @@ export default function Home() {
         onUploadSuccess={handleUploadSuccess}
         defaultCollectionName={selectedNode?.name}
       />
+
+      {/* Collection Data Modal */}
+      {collectionDataModalVisible && selectedNode && (
+        <CollectionDataModal
+          isVisible={collectionDataModalVisible}
+          collectionName={selectedNode.id}
+          onClose={handleCollectionDataModalClose}
+        />
+      )}
     </div>
   );
 }

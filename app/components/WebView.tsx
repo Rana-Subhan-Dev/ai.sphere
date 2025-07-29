@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, RotateCcw, Globe, ExternalLink } from 'lucide-react';
+import { X, RotateCcw, Globe, ExternalLink, RefreshCw } from 'lucide-react';
 
 interface WebViewProps {
   isVisible: boolean;
@@ -10,20 +10,28 @@ interface WebViewProps {
   isOpening?: boolean;
 }
 
-// Sites that commonly block embedding
-const BLOCKED_DOMAINS = [
-  'linkedin.com', 'whatsapp.com', 'facebook.com', 'instagram.com',
-  'twitter.com', 'x.com', 'youtube.com', 'google.com', 'github.com',
-  'stackoverflow.com', 'reddit.com', 'tiktok.com', 'discord.com'
-];
-
 export default function WebView({ isVisible, onClose, initialUrl, isOpening = false }: WebViewProps) {
   const [currentUrl, setCurrentUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [iframeBlocked, setIframeBlocked] = useState(false);
+  const [useProxy, setUseProxy] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const normalizedUrl = currentUrl.startsWith('http') ? currentUrl : `https://${currentUrl}`;
+  // Update currentUrl when initialUrl changes
+  useEffect(() => {
+    if (initialUrl && initialUrl !== currentUrl) {
+      console.log('WebView: URL changed from', currentUrl, 'to', initialUrl);
+      setCurrentUrl(initialUrl);
+      setUseProxy(false);
+      setError(null);
+      setIframeBlocked(false);
+    }
+  }, [initialUrl, currentUrl]);
+
+  const normalizedUrl = currentUrl && currentUrl.trim() ? (currentUrl.startsWith('http') ? currentUrl : `https://${currentUrl}`) : 'https://www.google.com';
+  const proxyUrl = `/api/proxy?url=${encodeURIComponent(normalizedUrl)}`;
+  const iframeSrc = useProxy ? proxyUrl : normalizedUrl;
   
   const formatDomain = (url: string) => {
     try {
@@ -35,8 +43,6 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
 
   const domain = formatDomain(currentUrl);
   const favicon = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-
-  const isBlockedDomain = BLOCKED_DOMAINS.some(blocked => domain.includes(blocked));
 
   // Handle iframe load with timeout
   useEffect(() => {
@@ -53,6 +59,7 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
         hasLoaded = true;
         setIsLoading(false);
         setError(null);
+        setIframeBlocked(false);
         clearTimeout(loadTimeout);
       }
     };
@@ -61,21 +68,81 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
       if (!hasLoaded) {
         hasLoaded = true;
         setIsLoading(false);
-        setError(`${domain} cannot be displayed in embedded view. Try opening in browser.`);
+        
+        // If direct loading failed, try proxy
+        if (!useProxy) {
+          setUseProxy(true);
+          setIsLoading(true);
+          if (iframeRef.current) {
+            iframeRef.current.src = proxyUrl;
+          }
+          return;
+        }
+        
+        setIframeBlocked(true);
+        setError(`${domain} cannot be displayed in embedded view.`);
         clearTimeout(loadTimeout);
       }
     };
 
-    // 8 second timeout
+    // Check if iframe is blocked by checking its content
+    const checkIframeContent = () => {
+      try {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc && iframeDoc.body) {
+          const bodyText = iframeDoc.body.textContent || '';
+          // Check for common blocking messages
+          if (bodyText.includes('X-Frame-Options') || 
+              bodyText.includes('frame-ancestors') ||
+              bodyText.includes('refused to connect') ||
+              bodyText.includes('blocked by frame-ancestors')) {
+            
+            // If direct loading failed, try proxy
+            if (!useProxy) {
+              setUseProxy(true);
+              setIsLoading(true);
+              if (iframeRef.current) {
+                iframeRef.current.src = proxyUrl;
+              }
+              return;
+            }
+            
+            setIframeBlocked(true);
+            setError(`${domain} blocks embedding for security reasons.`);
+          }
+        }
+      } catch (e) {
+        // Cross-origin error means iframe is blocked
+        if (!useProxy) {
+          setUseProxy(true);
+          setIsLoading(true);
+          if (iframeRef.current) {
+            iframeRef.current.src = proxyUrl;
+          }
+          return;
+        }
+        
+        setIframeBlocked(true);
+        setError(`${domain} blocks embedding for security reasons.`);
+      }
+    };
+
+    // 10 second timeout
     loadTimeout = setTimeout(() => {
       if (!hasLoaded) {
         hasLoaded = true;
         setIsLoading(false);
-        setError(`${domain} is taking too long to load. Try opening in browser.`);
+        checkIframeContent();
+        if (!iframeBlocked) {
+          setError(`${domain} is taking too long to load.`);
+        }
       }
-    }, 8000);
+    }, 10000);
 
     setIsLoading(true);
+    setError(null);
+    setIframeBlocked(false);
+    
     iframe.addEventListener('load', handleLoad);
     iframe.addEventListener('error', handleError);
 
@@ -86,7 +153,7 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
         iframe.removeEventListener('error', handleError);
       }
     };
-  }, [isVisible, currentUrl, domain]);
+  }, [isVisible, currentUrl, domain, iframeBlocked]);
 
   // Handle escape key
   useEffect(() => {
@@ -107,6 +174,16 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
 
   const handleOpenInBrowser = () => {
     window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    setError(null);
+    setIframeBlocked(false);
+    setUseProxy(false);
+    if (iframeRef.current) {
+      iframeRef.current.src = normalizedUrl;
+    }
   };
 
   if (!isVisible) return null;
@@ -135,9 +212,23 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
         />
         <Globe className="w-4 h-4 text-gray-400 hidden" />
         
-        <div className="flex-1 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-700">
+        <div className="flex-1 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-700 flex items-center gap-2">
           {normalizedUrl}
+          {useProxy && (
+            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">
+              Proxied
+            </span>
+          )}
         </div>
+
+        <button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+          title="Refresh"
+        >
+          <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
+        </button>
 
         <button
           onClick={handleOpenInBrowser}
@@ -162,7 +253,7 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
       )}
 
       {/* Error Message */}
-      {error && !isBlockedDomain && (
+      {error && iframeBlocked && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/50 p-8 text-center">
           <Globe className="w-12 h-12 text-gray-400" />
           <p className="text-gray-600">{error}</p>
@@ -175,37 +266,18 @@ export default function WebView({ isVisible, onClose, initialUrl, isOpening = fa
         </div>
       )}
 
-      {/* Blocked Domain Message */}
-      {isBlockedDomain && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/50 p-8 text-center">
-          <Globe className="w-12 h-12 text-gray-400" />
-          <p className="text-gray-600">
-            {domain} doesn't allow embedding for security reasons.
-            <br />
-            Please open it in your browser instead.
-          </p>
-          <button
-            onClick={handleOpenInBrowser}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Open in Browser
-          </button>
-        </div>
-      )}
-
       {/* Website Content */}
-      {!isBlockedDomain && (
-        <div className="flex-1 relative">
-          <iframe
-            ref={iframeRef}
-            src={normalizedUrl}
-            className="w-full h-full absolute inset-0"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-top-navigation allow-presentation"
-            referrerPolicy="no-referrer"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          />
-        </div>
-      )}
+      <div className="flex-1 relative">
+        <iframe
+          ref={iframeRef}
+          src={iframeSrc}
+          className="w-full h-full absolute inset-0"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals allow-top-navigation allow-presentation allow-top-navigation-by-user-activation"
+          referrerPolicy="no-referrer"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          loading="eager"
+        />
+      </div>
     </div>
   );
 } 

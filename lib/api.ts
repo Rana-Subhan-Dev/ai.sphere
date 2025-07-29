@@ -208,7 +208,7 @@ export const uploadToCollection = async (
 // Create new collection
 export const createNewCollection = async (userId: string, collectionName: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/dashboard/create_new_collection`, {
+    const response = await fetch(`${API_BASE_URL}/dashboard/create_new_collecction`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -236,6 +236,41 @@ export const createNewCollection = async (userId: string, collectionName: string
     return null;
   } catch (error) {
     console.error('Error creating collection:', error);
+    throw error; // Re-throw to let component handle it
+  }
+};
+
+// Create new collection (with typo in URL - alternative endpoint)
+export const createNewCollectionAlt = async (userId: string, collectionName: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/create_new_collecction`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        collection_name: collectionName,
+      }),
+    });
+
+    const data = await response.json();
+    
+    if (response.ok) {
+      return data;
+    }
+    
+    console.error('Collection creation failed (alt endpoint):', data);
+    
+    // Throw error with detail for better error handling
+    if (data.detail) {
+      throw { detail: data.detail };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error creating collection (alt endpoint):', error);
     throw error; // Re-throw to let component handle it
   }
 };

@@ -47,6 +47,7 @@ interface VortexProps {
   onWebViewStateChange?: (isVisible: boolean) => void;
   onPlusClick?: () => void;
   collectionUpdateTrigger?: number;
+  onCollectionNameClick?: (collectionName: string) => void;
 }
 
 export default function Vortex(props: VortexProps) {
@@ -283,6 +284,14 @@ export default function Vortex(props: VortexProps) {
   }, []);
 
   const handleWebViewOpen = useCallback((url: string) => {
+    console.log('Vortex: Opening WebView with URL:', url);
+    
+    // Ensure URL is valid
+    if (!url || !url.trim()) {
+      console.error('Vortex: Invalid URL provided:', url);
+      return;
+    }
+    
     // Create a new tab
     const newTabId = generateTabId();
     const newTab: WebViewTab = {

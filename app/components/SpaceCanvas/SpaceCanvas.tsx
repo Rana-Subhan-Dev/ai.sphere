@@ -130,7 +130,7 @@ const SpaceCanvasInner: React.FC<SpaceCanvasProps> = ({ spaceName, onClose }) =>
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [smartBarState, setSmartBarState] = useState<'collapsed' | 'normal' | 'expanded'>('collapsed');
+  const [smartBarState, setSmartBarState] = useState<'collapsed' | 'normal' | 'expanded'>('normal');
   const [chatVisible, setChatVisible] = useState(false);
   const [chatOpening, setChatOpening] = useState(false);
   const [controlPanelVisible, setControlPanelVisible] = useState(false);
@@ -183,6 +183,29 @@ const SpaceCanvasInner: React.FC<SpaceCanvasProps> = ({ spaceName, onClose }) =>
       }, 500);
     } else {
       setChatVisible(false);
+    }
+  }, []);
+
+  // Handle SmartBar hover to show chat
+  const handleSmartBarHover = useCallback((isHovering: boolean) => {
+    console.log('SpaceCanvas: SmartBar hover:', isHovering, 'Chat visible:', chatVisible);
+    if (isHovering && !chatVisible) {
+      // Add small delay to prevent rapid state changes
+      setTimeout(() => {
+        console.log('SpaceCanvas: Opening chat on hover');
+        handleChatStateChange(true);
+      }, 100);
+    }
+    // Don't close chat on mouse leave - let user close it manually
+  }, [chatVisible, handleChatStateChange]);
+
+  // Custom SmartBar state handler that prevents auto-collapse
+  const handleSmartBarStateChange = useCallback((newState: 'collapsed' | 'normal' | 'expanded') => {
+    // Prevent collapsing to 'collapsed' state in collection view
+    if (newState === 'collapsed') {
+      setSmartBarState('normal');
+    } else {
+      setSmartBarState(newState);
     }
   }, []);
 
@@ -267,17 +290,20 @@ const SpaceCanvasInner: React.FC<SpaceCanvasProps> = ({ spaceName, onClose }) =>
 
       {/* Smart Bar */}
       <div className="absolute bottom-0 left-0 right-0 flex justify-center">
-                  <SmartBar
-            onStateChange={setSmartBarState}
-            onHoverChange={() => {}}
-            forceHidden={false}
-            interactionPreviewVisible={false}
-            collectionName={spaceName}
-            onSendMessage={(message) => {
-              handleChatStateChange(true);
-            }}
-            onPlusClick={() => setControlPanelVisible(true)}
-          />
+        <SmartBar
+          onStateChange={handleSmartBarStateChange}
+          onHoverChange={handleSmartBarHover}
+          forceHidden={false}
+          interactionPreviewVisible={false}
+          collectionName={spaceName}
+          onSendMessage={(message) => {
+            // Send message to chat API with collection context
+            console.log('Sending message to chat:', message, 'Collection:', spaceName);
+            // The chat will handle the API call with collection_name parameter
+            handleChatStateChange(true);
+          }}
+          onPlusClick={() => setControlPanelVisible(true)}
+        />
       </div>
 
       {/* Chat View */}

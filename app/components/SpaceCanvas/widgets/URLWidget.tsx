@@ -14,11 +14,26 @@ interface URLWidgetProps {
 const URLWidget: React.FC<URLWidgetProps> = ({ data }) => {
   const { openWebView } = useWebView();
   
-  const url = data.fileURL;
-  const hostname = new URL(url).hostname.replace('www.', '');
-  const favicon = `https://www.google.com/s2/favicons?domain=${url}&sz=32`;
+  console.log('URLWidget data:', data); // Debug log
+  
+  // Ensure URL has proper protocol
+  const url = data.fileURL.startsWith('http') ? data.fileURL : `https://${data.fileURL}`;
+  
+  console.log('URLWidget processed URL:', url); // Debug log
+  
+  // Safely extract hostname
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname.replace('www.', '');
+  } catch (error) {
+    // If URL parsing fails, use the original URL as fallback
+    hostname = data.fileURL.replace('https://', '').replace('http://', '').replace('www.', '');
+  }
+  
+  const favicon = `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`;
 
   const handleClick = () => {
+    console.log('URLWidget: Opening URL:', url); // Debug log
     openWebView(url);
   };
 

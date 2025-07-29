@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Plus, FilePlus, Globe, Layers, Search, Settings, Link2, Sparkles } from 'lucide-react';
-import { createNewCollection, uploadToCollection, uploadFileToCollection, getAuthData } from '../../lib/api';
+import { createNewCollection, createNewCollectionAlt, uploadToCollection, uploadFileToCollection, getAuthData } from '../../lib/api';
 
 interface ControlPanelProps {
   isVisible: boolean;
@@ -21,8 +21,8 @@ const TABS = [
     options: [
       { icon: '📤', title: 'Upload File', subtitle: 'Feed a file into the system', keywords: ['upload', 'file', 'import', 'feed'] },
       { icon: '🔗', title: 'Paste Link', subtitle: 'Feed a URL or link', keywords: ['paste', 'link', 'url', 'feed'] },
+      { icon: '📝', title: 'Text', subtitle: 'Add text content to the collection', keywords: ['text', 'content', 'note', 'feed'] },
       { icon: '🗂️', title: 'Import Dataset', subtitle: 'Feed a dataset (CSV, JSON, etc.)', keywords: ['import', 'dataset', 'csv', 'json', 'feed'] },
-      { icon: '🃏', title: 'Create FlashCard', subtitle: 'Make a new flashcard for spaced repetition', keywords: ['flashcard', 'card', 'memory', 'learn', 'feed'] },
     ],
   },
   {
@@ -75,6 +75,24 @@ const TABS = [
   },
 ];
 
+// Function to get filtered tabs based on context
+const getFilteredTabs = (collectionName?: string) => {
+  if (!collectionName) {
+    // On main sphere - only show Sphere option in New tab
+    return TABS.map(tab => {
+      if (tab.key === 'new') {
+        return {
+          ...tab,
+          options: tab.options.filter(option => option.title === 'Sphere')
+        };
+      }
+      return tab;
+    });
+  }
+  // In a collection - show all options
+  return TABS;
+};
+
 const TAB_SHORTCUTS: Record<string, string> = {
   new: 'Shift+N',
   web: 'Shift+T',
@@ -117,7 +135,9 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
     onClose();
   };
 
-  const tabConfig = TABS.find(tab => tab.key === activeTab) || TABS[0];
+  // Get filtered tabs based on context
+  const filteredTabs = getFilteredTabs(collectionName);
+  const tabConfig = filteredTabs.find(tab => tab.key === activeTab) || filteredTabs[0];
 
   // Filter options based on search input
   const filteredOptions = tabConfig.options.filter(option => {
@@ -129,6 +149,16 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
       option.keywords.some(keyword => keyword.toLowerCase().includes(searchTerm))
     );
   });
+
+  // Get context-aware placeholder
+  const getPlaceholder = () => {
+    if (!collectionName && activeTab === 'new') {
+      return 'Enter sphere name...';
+    } else if (collectionName && activeTab === 'feed') {
+      return 'Enter text content...';
+    }
+    return tabConfig.placeholder;
+  };
 
   // Reset selected index when options change
   useEffect(() => {
@@ -373,23 +403,22 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
         inputRef.current?.focus();
         setInputText('https://');
         return;
+      } else if (option.title.toLowerCase().includes('text')) {
+        // For text, focus input field for text content
+        inputRef.current?.focus();
+        setInputText('');
+        return;
       } else if (option.title.toLowerCase().includes('import dataset')) {
         // For datasets, trigger file input
         fileInputRef.current?.click();
         return;
-      } else if (option.title.toLowerCase().includes('flashcard')) {
-        // For flashcards, focus input for text
-        inputRef.current?.focus();
-        setInputText('');
-        return;
       }
     } else if (!collectionName && activeTab === 'new') {
-      // We're on main sphere - create new collection
-      if (inputText.trim()) {
-        await handleCreateCollection();
-      } else {
-        // Focus input for collection name
+      // We're on main sphere - handle Sphere option
+      if (option.title === 'Sphere') {
+        // Focus the input field for sphere name
         inputRef.current?.focus();
+        setInputText('');
         return;
       }
     }
@@ -446,6 +475,10 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
   };
 
   const handleCreateCollection = async () => {
+    await handleCreateCollectionWithName(inputText);
+  };
+
+  const handleCreateCollectionWithName = async (collectionNameToUse: string) => {
     const authData = getAuthData();
     if (!authData?.user?.id) {
       setError('User not authenticated');
@@ -456,12 +489,19 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
     setError(null);
 
     try {
-      const success = await createNewCollection(authData.user.id, inputText);
+      // Try the main endpoint first
+      let success = await createNewCollection(authData.user.id, collectionNameToUse);
+      
+      if (!success) {
+        // If main endpoint fails, try the alternative endpoint with typo
+        console.log('Trying alternative endpoint...');
+        success = await createNewCollectionAlt(authData.user.id, collectionNameToUse);
+      }
       
       if (success) {
         console.log('Collection created successfully');
         onSuccess?.();
-        setInputText('');
+        setInputText(''); // Clear the input text
         handleClose();
       } else {
         setError('Collection creation failed. Please try a different name.');
@@ -469,6 +509,22 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
     } catch (error: any) {
       console.error('Error:', error);
       if (error?.detail === 'Not Found') {
+        // If first endpoint returns Not Found, try the alternative
+        try {
+          console.log('First endpoint not found, trying alternative...');
+          const altSuccess = await createNewCollectionAlt(authData.user.id, collectionNameToUse);
+          
+          if (altSuccess) {
+            console.log('Collection created successfully with alternative endpoint');
+            onSuccess?.();
+            setInputText(''); // Clear the input text
+            handleClose();
+            return;
+          }
+        } catch (altError: any) {
+          console.error('Alternative endpoint also failed:', altError);
+        }
+        
         setError('API endpoint not found. Please check your connection.');
       } else {
         setError('An error occurred. Please try again.');
@@ -525,11 +581,9 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
             setError('Upload failed. Please try again.');
           }
         }
-      } else {
-        // We're on main sphere - create new collection
-        if (activeTab === 'new') {
-          await handleCreateCollection();
-        }
+      } else if (!collectionName && activeTab === 'new') {
+        // We're on main sphere - create new sphere
+        await handleCreateCollectionWithName(inputText.trim());
       }
     } catch (error: any) {
       console.error('Error:', error);
@@ -699,10 +753,7 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
                     caretColor: 'rgba(0, 0, 0, 0.3)',
                     minHeight: '20px'
                   }}
-                  placeholder={collectionName ? 
-                    (activeTab === 'feed' ? 'Add content to collection...' : tabConfig.placeholder) :
-                    (activeTab === 'new' ? 'Enter unique sphere name...' : tabConfig.placeholder)
-                  }
+                  placeholder={getPlaceholder()}
                   rows={1}
                 />
               </div>

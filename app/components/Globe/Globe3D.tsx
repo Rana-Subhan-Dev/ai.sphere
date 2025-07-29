@@ -23,7 +23,7 @@ function generateRandomPosition(): { lat: number; lon: number } {
   return { lat, lon };
 }
 
-// Function to generate consistent position based on collection name
+// Function to generate consistent position based on collection name with collision avoidance
 function generateConsistentPosition(collectionName: string): { lat: number; lon: number } {
   // Create a simple hash from the collection name
   let hash = 0;
@@ -33,26 +33,100 @@ function generateConsistentPosition(collectionName: string): { lat: number; lon:
     hash = hash & hash; // Convert to 32-bit integer
   }
   
-  // Use hash to generate consistent lat/lon
-  const lat = ((Math.abs(hash) % 180) - 90); // -90 to +90
-  const lon = ((Math.abs(hash * 2) % 360) - 180); // -180 to +180
+  // Use golden ratio spiral for better distribution
+  const goldenRatio = 1.618033988749895;
+  const goldenAngle = 2 * Math.PI / goldenRatio;
+  
+  // Use hash to generate a position on the spiral
+  const spiralIndex = Math.abs(hash) % 1000; // Use modulo to get a reasonable range
+  const angle = spiralIndex * goldenAngle;
+  const radius = Math.sqrt(spiralIndex) * 0.1; // Gradually increase radius
+  
+  // Convert spiral coordinates to lat/lon
+  // Use Fibonacci sphere distribution for better coverage
+  const phi = Math.acos(1 - 2 * (spiralIndex % 1000) / 1000); // Latitude angle
+  const theta = goldenAngle * spiralIndex; // Longitude angle
+  
+  // Convert to degrees and ensure proper ranges
+  const lat = (90 - (phi * 180 / Math.PI)) * 0.8; // Scale down to avoid poles, -72 to +72
+  const lon = ((theta * 180 / Math.PI) % 360) - 180; // -180 to +180
   
   return { lat, lon };
 }
 
-// Convert collection names to nodes
+// Function to calculate distance between two points on a sphere
+function calculateSphericalDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 1; // Unit sphere radius
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Function to check if a position is too close to existing positions
+function isPositionValid(newLat: number, newLon: number, existingPositions: { lat: number; lon: number }[], minDistance: number = 0.3): boolean {
+  for (const pos of existingPositions) {
+    const distance = calculateSphericalDistance(newLat, newLon, pos.lat, pos.lon);
+    if (distance < minDistance) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Convert collection names to nodes with collision avoidance
 function createNodesFromCollections(collections: UserCollection[]): CollectionNode[] {
-  return collections.map((collection) => {
-    const position = generateConsistentPosition(collection.name);
-    return {
-      id: `node_${collection.name}`, // Unique ID with prefix
+  const nodes: CollectionNode[] = [];
+  const existingPositions: { lat: number; lon: number }[] = [];
+  
+  for (const collection of collections) {
+    let position = generateConsistentPosition(collection.name);
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    // Try to find a valid position that doesn't collide with existing nodes
+    while (!isPositionValid(position.lat, position.lon, existingPositions) && attempts < maxAttempts) {
+      // Add some randomness to the base position
+      const randomOffset = (Math.random() - 0.5) * 20; // ±10 degrees
+      position = {
+        lat: position.lat + randomOffset,
+        lon: position.lon + randomOffset
+      };
+      
+      // Ensure lat/lon are within valid ranges
+      position.lat = Math.max(-72, Math.min(72, position.lat));
+      position.lon = ((position.lon + 180) % 360) - 180;
+      
+      attempts++;
+    }
+    
+    // If we still can't find a good position, use the original but with some offset
+    if (attempts >= maxAttempts) {
+      position = {
+        lat: position.lat + (Math.random() - 0.5) * 30,
+        lon: position.lon + (Math.random() - 0.5) * 30
+      };
+      position.lat = Math.max(-72, Math.min(72, position.lat));
+      position.lon = ((position.lon + 180) % 360) - 180;
+    }
+    
+    const node: CollectionNode = {
+      id: `node_${collection.name}`,
       name: collection.name,
       collectionName: collection.name,
       lat: position.lat,
       lon: position.lon,
       createdAt: collection.created_at,
     };
-  });
+    
+    nodes.push(node);
+    existingPositions.push(position);
+  }
+  
+  return nodes;
 }
 
 // Convert lat/lon to 3D position on sphere
@@ -376,28 +450,53 @@ const GlobeScene: React.FC<{
         />
       </mesh>
       
-      {/* Collection Nodes - All Gray */}
+      {/* Collection Nodes - Improved Visual Design with Original Gray Color */}
       {nodes.map((node) => {
         const [x, y, z] = latLonToVec3(node.lat, node.lon, 1.3);
         const isHovered = hoveredNode === node.id;
         
         return (
-          <mesh 
-            key={node.id} 
-            position={[x, y, z]} 
-            castShadow 
-            receiveShadow
-            onClick={() => handleNodeClick(node)}
-            onPointerEnter={() => setHoveredNode(node.id)}
-            onPointerLeave={() => setHoveredNode(null)}
-          >
-            <sphereGeometry args={[0.08, 16, 16]} />
-            <meshStandardMaterial 
-              color="#bdbdbd" 
-              emissive="#bdbdbd"
-              emissiveIntensity={isHovered ? 0.5 : 0}
-            />
-          </mesh>
+          <group key={node.id} position={[x, y, z]}>
+            {/* Main node sphere */}
+            <mesh 
+              castShadow 
+              receiveShadow
+              onClick={() => handleNodeClick(node)}
+              onPointerEnter={() => setHoveredNode(node.id)}
+              onPointerLeave={() => setHoveredNode(null)}
+            >
+              <sphereGeometry args={[isHovered ? 0.12 : 0.08, 16, 16]} />
+              <meshStandardMaterial 
+                color="#bdbdbd" 
+                emissive="#bdbdbd"
+                emissiveIntensity={isHovered ? 0.5 : 0.1}
+                roughness={0.2}
+                metalness={0.1}
+              />
+            </mesh>
+            
+            {/* Glow effect when hovered */}
+            {isHovered && (
+              <mesh>
+                <sphereGeometry args={[0.15, 16, 16]} />
+                <meshBasicMaterial 
+                  color="#bdbdbd"
+                  transparent
+                  opacity={0.3}
+                />
+              </mesh>
+            )}
+            
+            {/* Connection line to globe surface */}
+            <mesh position={[0, 0, 0]}>
+              <cylinderGeometry args={[0.01, 0.01, 0.1, 8]} />
+              <meshBasicMaterial 
+                color="#d1d5db"
+                transparent
+                opacity={0.6}
+              />
+            </mesh>
+          </group>
         );
       })}
       
