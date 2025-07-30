@@ -406,7 +406,11 @@ const GlobeScene: React.FC<{
   // Focus on latest node when requested
   useEffect(() => {
     if (focusOnLatestNode && nodes.length > 0) {
-      const latestNode = nodes[nodes.length - 1];
+      // Find the most recently created node by sorting by creation date
+      const sortedNodes = [...nodes].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const latestNode = sortedNodes[0];
       focusOnPosition(latestNode.lat, latestNode.lon);
     }
   }, [focusOnLatestNode, nodes, focusOnPosition]);
@@ -682,11 +686,14 @@ const Globe3D: React.FC<{
             
             if (nodeToFocus) {
               console.log('🎯 FOCUSING ON:', newestCollection.name, 'at position:', nodeToFocus.lat, nodeToFocus.lon);
+              // Set focus immediately and highlight the node
               setShouldFocusLatest(true);
               setHoveredNode(nodeToFocus.id);
+              
+              // Clear hover after animation completes
               setTimeout(() => {
                 setHoveredNode(null);
-              }, 2000);
+              }, 3000); // Keep highlight longer for better visibility
             }
           } else {
             console.log('No new collections to focus on');
@@ -736,7 +743,7 @@ const Globe3D: React.FC<{
     if (shouldFocusLatest) {
       const timer = setTimeout(() => {
         setShouldFocusLatest(false);
-      }, 1500); // Slightly longer than animation duration
+      }, 2500); // Give more time for the focus animation to complete
       return () => clearTimeout(timer);
     }
   }, [shouldFocusLatest]);

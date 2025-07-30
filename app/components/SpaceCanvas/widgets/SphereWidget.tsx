@@ -13,9 +13,9 @@ export interface SphereWidgetData {
   isActive?: boolean;
 }
 
-interface SphereWidgetProps extends Omit<NodeProps, 'data'> {
+interface SphereWidgetProps extends Omit<NodeProps, 'data' | 'selected'> {
   data: SphereWidgetData;
-  selected?: boolean;
+  selected: boolean;
 }
 
 const SphereWidget: React.FC<SphereWidgetProps> = ({ data, selected }) => {

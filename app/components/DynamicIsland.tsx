@@ -92,6 +92,9 @@ export default function DynamicIsland({
 }: DynamicIslandProps) {
   const [state, setState] = useState<DynamicIslandState>('collapsed');
   
+  // Click-to-lock state for dock
+  const [isDockLocked, setIsDockLocked] = useState(false);
+  
   // Browser tabs dock state
   const [isHovering, setIsHovering] = useState(false);
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
@@ -192,24 +195,25 @@ export default function DynamicIsland({
   const hasContentOpened = sphereWindowVisible || chatVisible || webViewVisible || selectedSphere;
   const isCompactMode = smartBarState !== 'collapsed' && !hasContentOpened;
 
-  // Show dock only when sphere or dock is hovered
+  // Updated state logic with click-to-lock functionality
   useEffect(() => {
     if (isCompactMode) return;
+    
     if (webViewVisible) {
       // Always keep DynamicIsland in full-width mode when webViewVisible
-      if (isSphereHovered || isDockHovered) {
+      if (isDockLocked || isSphereHovered || isDockHovered) {
         setState('full-width-dock');
       } else {
         setState('full-width');
       }
-    } else if (isSphereHovered || isDockHovered) {
+    } else if (isDockLocked || isSphereHovered || isDockHovered) {
       setState('full-width-dock');
     } else if (!sphereWindowVisible && !chatVisible && !webViewVisible) {
       setState('collapsed');
-    } else if (state === 'full-width-dock' && !(isSphereHovered || isDockHovered)) {
+    } else if (state === 'full-width-dock' && !isDockLocked && !(isSphereHovered || isDockHovered)) {
       setState('collapsed');
     }
-  }, [isSphereHovered, isDockHovered, isCompactMode, sphereWindowVisible, chatVisible, webViewVisible, state]);
+  }, [isDockLocked, isSphereHovered, isDockHovered, isCompactMode, sphereWindowVisible, chatVisible, webViewVisible, state]);
 
   // Handle sphere window closing - collapse if not hovering and chat/webview not visible (but only if not in compact mode)
   useEffect(() => {
@@ -218,31 +222,31 @@ export default function DynamicIsland({
       return;
     }
     
-    if (!sphereWindowVisible && !isHovering && !chatVisible && !webViewVisible && (state === 'full-width' || state === 'full-width-dock')) {
+    if (!sphereWindowVisible && !isHovering && !chatVisible && !webViewVisible && !isDockLocked && (state === 'full-width' || state === 'full-width-dock')) {
       setState('collapsed');
     }
-  }, [sphereWindowVisible, isHovering, chatVisible, webViewVisible, state, isCompactMode]);
+  }, [sphereWindowVisible, isHovering, chatVisible, webViewVisible, isDockLocked, state, isCompactMode]);
 
   // Memoized event handlers - disabled in compact mode
   const handleMouseEnter = useCallback(() => {
     if (isCompactMode) return; // No hover behavior in compact mode
     
     setIsHovering(true);
-    if (state === 'collapsed' && !chatVisible && !webViewVisible) {
+    if (state === 'collapsed' && !chatVisible && !webViewVisible && !isDockLocked) {
       setState('full-width');
     }
-  }, [state, chatVisible, webViewVisible, isCompactMode]);
+  }, [state, chatVisible, webViewVisible, isDockLocked, isCompactMode]);
 
   const handleMouseLeave = useCallback(() => {
     if (isCompactMode) return; // No hover behavior in compact mode
     
     setIsHovering(false);
-    // Only collapse if sphere window is not visible AND not in dock state AND chat/webview not visible
-    if (state === 'full-width' && !sphereWindowVisible && !chatVisible && !webViewVisible) {
+    // Only collapse if sphere window is not visible AND not in dock state AND chat/webview not visible AND dock not locked
+    if (state === 'full-width' && !sphereWindowVisible && !chatVisible && !webViewVisible && !isDockLocked) {
       setState('collapsed');
     }
-    // Don't collapse when in full-width-dock state or when chat/webview is visible
-  }, [state, sphereWindowVisible, chatVisible, webViewVisible, isCompactMode]);
+    // Don't collapse when in full-width-dock state or when chat/webview is visible or dock is locked
+  }, [state, sphereWindowVisible, chatVisible, webViewVisible, isDockLocked, isCompactMode]);
 
   const handleSphereEnter = useCallback(() => {
     if (isCompactMode) return; // No hover behavior in compact mode
@@ -260,10 +264,11 @@ export default function DynamicIsland({
   const handleDockContainerLeave = useCallback(() => {
     if (isCompactMode) return; // No hover behavior in compact mode
     
-    if (state === 'full-width-dock' && !sphereWindowVisible && !chatVisible && !webViewVisible) {
+    // Only collapse if dock is not locked
+    if (state === 'full-width-dock' && !sphereWindowVisible && !chatVisible && !webViewVisible && !isDockLocked) {
       setState('collapsed');
     }
-  }, [state, sphereWindowVisible, chatVisible, webViewVisible, isCompactMode]);
+  }, [state, sphereWindowVisible, chatVisible, webViewVisible, isDockLocked, isCompactMode]);
 
   const handleSphereClick = useCallback(() => {
     // Get the current sphere name - use selected sphere name or default to "Home"
@@ -274,6 +279,12 @@ export default function DynamicIsland({
   const handleChatClick = useCallback(() => {
     onChatClick?.();
   }, [onChatClick]);
+
+  // New handler for dock toggle click
+  const handleDockToggleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent sphere click
+    setIsDockLocked(!isDockLocked);
+  }, [isDockLocked]);
 
   // Get display text for the sphere
   const getSphereDisplayText = () => {
@@ -348,8 +359,6 @@ export default function DynamicIsland({
                     onDockHoverChange?.(false);
                   }}
                 >
-
-
                   <div 
                     className="flex items-end justify-center overflow-visible" 
                     style={{ 
@@ -448,8 +457,6 @@ export default function DynamicIsland({
                               <X size={8} className="text-white" />
                             </button>
                           )}
-                          
-
                         </div>
                       );
                     })}
@@ -458,40 +465,40 @@ export default function DynamicIsland({
               </div>
             ) : (
               // Regular App Controls
-            <div className="flex justify-start items-center gap-3.5">
-              <div className="px-4 border-l-[0.50px] border-r-[0.50px] border-black/5 flex justify-start items-center gap-3.5">
-                <div 
-                  className="w-6 h-4 bg-gradient-to-b from-blue-500 to-blue-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center"
-                  onClick={handleChatClick}
-                >
-                  <MessageSquare size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-gray-300 to-gray-400 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Folder size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-green-500 to-green-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Calendar size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-purple-500 to-purple-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Settings size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-red-500 to-red-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Bell size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-orange-500 to-orange-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Search size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-indigo-500 to-indigo-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <User size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-pink-500 to-pink-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Command size={10} className="text-white" />
-                </div>
-                <div className="w-6 h-4 bg-gradient-to-b from-teal-500 to-teal-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
-                  <Home size={10} className="text-white" />
+              <div className="flex justify-start items-center gap-3.5">
+                <div className="px-4 border-l-[0.50px] border-r-[0.50px] border-black/5 flex justify-start items-center gap-3.5">
+                  <div 
+                    className="w-6 h-4 bg-gradient-to-b from-blue-500 to-blue-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center"
+                    onClick={handleChatClick}
+                  >
+                    <MessageSquare size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-gray-300 to-gray-400 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Folder size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-green-500 to-green-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Calendar size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-purple-500 to-purple-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Settings size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-red-500 to-red-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Bell size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-orange-500 to-orange-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Search size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-indigo-500 to-indigo-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <User size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-pink-500 to-pink-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Command size={10} className="text-white" />
+                  </div>
+                  <div className="w-6 h-4 bg-gradient-to-b from-teal-500 to-teal-600 rounded-sm shadow-sm cursor-pointer hover:scale-105 transition-transform duration-200 flex items-center justify-center">
+                    <Home size={10} className="text-white" />
+                  </div>
                 </div>
               </div>
-            </div>
             )}
           </div>
         </div>
@@ -581,15 +588,15 @@ export default function DynamicIsland({
               ) : (
                 // Regular Controls
                 <>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Command size={14} className="text-black/40" />
-              </div>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Search size={14} className="text-black/40" />
-              </div>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Calendar size={14} className="text-black/40" />
-              </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Command size={14} className="text-black/40" />
+                  </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Search size={14} className="text-black/40" />
+                  </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Calendar size={14} className="text-black/40" />
+                  </div>
                 </>
               )}
             </div>
@@ -600,14 +607,16 @@ export default function DynamicIsland({
                 <Command size={12} className="text-black/40" />
               </div>
 
-              {/* Selected Sphere */}
+              {/* Selected Sphere with Dock Toggle Button */}
               <div 
                 className="h-7 px-3.5 py-2 border-l-[0.50px] border-r-[0.50px] border-black/10 flex justify-start items-center gap-3.5 transition-colors duration-200"
                 onMouseEnter={() => setIsSphereHovered(true)}
                 onMouseLeave={() => setIsSphereHovered(false)}
-                onClick={handleSphereClick} 
               >
-                <div className="flex justify-start items-center pl-2 pr-2.5 py-1.5 gap-2 rounded-[10px] hover:bg-black/[3.5%] cursor-pointer">
+                <div 
+                  className="flex justify-start items-center pl-2 pr-2.5 py-1.5 gap-2 rounded-[10px] hover:bg-black/[3.5%] cursor-pointer"
+                  onClick={handleSphereClick}
+                >
                   <div className="w-5 h-5 bg-[#dddddd]/10 rounded-2xl shadow-[0px_0px_26.666667938232422px_0px_rgba(0,0,0,0.10)] shadow-[inset_2.6666667461395264px_-2.6666667461395264px_13.333333969116211px_0px_rgba(255,255,255,1.00)] shadow-[inset_-2.6666667461395264px_2.6666667461395264px_6.6666669845581055px_0px_rgba(0,0,0,0.10)] backdrop-blur-[33.33px]" />
                   <div className="text-black text-sm font-normal font-['Neue_Montreal'] flex items-center gap-1">
                     {getSphereDisplayText()}
@@ -618,11 +627,23 @@ export default function DynamicIsland({
                     )}
                   </div>
                 </div>
+                
+                {/* Dock Toggle Button - Now using the existing Folder icon */}
               </div>
               
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center hover:bg-black/[3.5%] cursor-pointer transition-colors duration-200 ease-out">
-                <Folder size={16} className="text-black/40" />
-              </div>
+              <button
+                onClick={handleDockToggleClick}
+                className={`
+                  h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center transition-all duration-200 ease-out cursor-pointer
+                  ${isDockLocked 
+                    ? 'bg-blue-500/20 text-blue-600 hover:bg-blue-500/30' 
+                    : 'hover:bg-black/[3.5%] text-black/40 hover:text-black/60'
+                  }
+                `}
+                title={isDockLocked ? "Dock locked (Click to unlock)" : "Click to lock dock"}
+              >
+                <Folder size={16} />
+              </button>
             </div>
 
             {/* Right Section */}
@@ -653,18 +674,18 @@ export default function DynamicIsland({
               ) : (
                 // Regular System Controls
                 <>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Wifi size={16} className="text-black/40" />
-              </div>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Bluetooth size={14} className="text-black/40" />
-              </div>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Volume2 size={12} className="text-black/40" />
-              </div>
-              <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
-                <Battery size={14} className="text-black/40" />
-              </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Wifi size={16} className="text-black/40" />
+                  </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Bluetooth size={14} className="text-black/40" />
+                  </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Volume2 size={12} className="text-black/40" />
+                  </div>
+                  <div className="h-7 w-7 p-1.5 rounded-[10px] flex justify-center items-center gap-1.5 hover:bg-black/[3.5%] cursor-pointer transition-all duration-200 ease-out">
+                    <Battery size={14} className="text-black/40" />
+                  </div>
                 </>
               )}
             </div>
@@ -673,4 +694,4 @@ export default function DynamicIsland({
       </div>
     </div>
   );
-} 
+}

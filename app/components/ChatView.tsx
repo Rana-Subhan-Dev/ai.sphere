@@ -155,7 +155,10 @@ export default function ChatView({
     >
       {/* Close Button */}
       <button
-        onClick={onClose}
+        onClick={()=>{
+          onClose();
+          setMessages([]);
+        }} 
         className="absolute top-4 right-4 z-[800] w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
         title="Close Chat"
       >

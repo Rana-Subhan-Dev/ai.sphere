@@ -664,6 +664,11 @@ const VortexContent: React.FC<{
             onNodeClick={props.onNodeClick}
             onCloseOverlay={props.onCloseOverlay}
             newPopupVisible={props.newPopupVisible}
+            onCollectionUpdate={() => {
+              // This will trigger the Globe3D to refresh and detect new collections
+              // The key prop will force a re-render, and the onCollectionUpdate will trigger the fetch
+              console.log('Collection update triggered from Vortex, trigger value:', props.collectionUpdateTrigger);
+            }}
             key={props.collectionUpdateTrigger}
           />
         </div>

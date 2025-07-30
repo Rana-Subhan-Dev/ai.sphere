@@ -19,10 +19,10 @@ const TABS = [
     draggableLabel: 'Feed',
     placeholder: 'Paste or upload data, files, or links to feed the system...',
     options: [
-      { icon: '📤', title: 'Upload File', subtitle: 'Feed a file into the system', keywords: ['upload', 'file', 'import', 'feed'] },
+      { icon: '📤', title: 'Upload pdf', subtitle: 'Feed a pdf file', keywords: ['upload', 'file', 'import', 'feed'] },
       { icon: '🔗', title: 'Paste Link', subtitle: 'Feed a URL or link', keywords: ['paste', 'link', 'url', 'feed'] },
       { icon: '📝', title: 'Text', subtitle: 'Add text content to the collection', keywords: ['text', 'content', 'note', 'feed'] },
-      { icon: '🗂️', title: 'Import Dataset', subtitle: 'Feed a dataset (CSV, JSON, etc.)', keywords: ['import', 'dataset', 'csv', 'json', 'feed'] },
+      { icon: '🗂️', title: 'Upload Image', subtitle: 'Feed an image', keywords: ['import', 'dataset', 'csv', 'json', 'feed'] },
     ],
   },
   {
@@ -394,7 +394,7 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
 
     if (collectionName && activeTab === 'feed') {
       // We're in a collection - handle different upload types
-      if (option.title.toLowerCase().includes('upload file')) {
+      if (option.title.toLowerCase().includes('upload pdf')) {
         // Trigger file input for file upload
         fileInputRef.current?.click();
         return;
@@ -408,7 +408,7 @@ export default function ControlPanel({ isVisible, onClose, initialTab, collectio
         inputRef.current?.focus();
         setInputText('');
         return;
-      } else if (option.title.toLowerCase().includes('import dataset')) {
+      } else if (option.title.toLowerCase().includes('upload image')) {
         // For datasets, trigger file input
         fileInputRef.current?.click();
         return;
